@@ -400,8 +400,8 @@ func ExampleRelayer_Write() {
 	// Example usage
 	relayer, err := NewRelayer(Config{
 		Host:         "localhost:18443",
-		User:         "aireshbhat",
-		Pass:         "V0cwTMjIW0twpQZmCyumM9HYUbbtryfQ_IDZxSnBrGI",
+		User:         "rpcuser",
+		Pass:         "rpcpass",
 		HTTPPostMode: true,
 		DisableTLS:   true,
 	})
@@ -426,8 +426,8 @@ func ExampleRelayer_Read() {
 	// Example usage
 	relayer, err := NewRelayer(Config{
 		Host:         "localhost:18443",
-		User:         "aireshbhat",
-		Pass:         "V0cwTMjIW0twpQZmCyumM9HYUbbtryfQ_IDZxSnBrGI",
+		User:         "rpcuser",
+		Pass:         "rpcpass",
 		HTTPPostMode: true,
 		DisableTLS:   true,
 	})
