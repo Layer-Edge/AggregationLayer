@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Layer-Edge/bitcoin-da/reader"
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
@@ -15,6 +16,8 @@ var (
 	internalPrivateKey = "cNR4CfUPBZNEZE9rShP4ix2NRPUNFfmDjecG7W9ySpupjGTMUKbw"
 )
 
+var LayerEdgeRPC = ""
+
 var ExampleConfig = relayer.Config{
 	Host:         "localhost:18443",
 	User:         "jeet",
@@ -25,7 +28,8 @@ var ExampleConfig = relayer.Config{
 
 func main() {
 	// Call the ExampleRelayer_Write function to write data to the blockchain.
-	ExampleRelayer_Write()
+	// ExampleRelayer_Write()
 	// Call the ExampleRelayer_Read function to read data from the blockchain.
 	// ExampleRelayer_Read()
+	reader.SubscribeToBlocks()
 }
