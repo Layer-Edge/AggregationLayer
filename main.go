@@ -1,7 +1,13 @@
 package main
 
 import (
-	"github.com/Layer-Edge/bitcoin-da/reader"
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
@@ -16,7 +22,13 @@ var (
 	internalPrivateKey = "cNR4CfUPBZNEZE9rShP4ix2NRPUNFfmDjecG7W9ySpupjGTMUKbw"
 )
 
-var LayerEdgeRPC = ""
+var LayerEdgeRPC = struct {
+	WSS  string
+	HTTP string
+}{
+	WSS:  "wss://testnet-rpc.layeredge.io/ws",
+	HTTP: "https://testnet-rpc.layeredge.io/http",
+}
 
 var ExampleConfig = relayer.Config{
 	Host:         "localhost:18443",
@@ -27,9 +39,35 @@ var ExampleConfig = relayer.Config{
 }
 
 func main() {
-	// Call the ExampleRelayer_Write function to write data to the blockchain.
-	// ExampleRelayer_Write()
-	// Call the ExampleRelayer_Read function to read data from the blockchain.
-	// ExampleRelayer_Read()
-	reader.SubscribeToBlocks()
+	client, err := ethclient.Dial(LayerEdgeRPC.WSS)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	relayer, err := relayer.NewRelayer(ExampleConfig)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	headers := make(chan *types.Header)
+	sub, err := client.SubscribeNewHead(context.Background(), headers)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for {
+		select {
+		case err := <-sub.Err():
+			log.Fatal(err)
+		case header := <-headers:
+			fmt.Println("Hash: ", header.Hash().Hex())
+			data, err := relayer.Read(PROTOCOL_ID)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Println("Data: ", data)
+		}
+	}
 }

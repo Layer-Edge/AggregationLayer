@@ -7,7 +7,7 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
-func ExampleRelayer_Write() {
+func ExampleRelayer_Write(data string) {
 	// Example usage
 	relayer, err := relayer.NewRelayer(ExampleConfig)
 	if err != nil {
@@ -15,7 +15,7 @@ func ExampleRelayer_Write() {
 		return
 	}
 	fmt.Println("Writing...")
-	_, err = relayer.Write(bobPrivateKey, internalPrivateKey, PROTOCOL_ID, []byte("rollkit-btc: gm"))
+	_, err = relayer.Write(bobPrivateKey, internalPrivateKey, PROTOCOL_ID, []byte(data))
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -27,14 +27,14 @@ func ExampleRelayer_Write() {
 
 // ExampleRelayer_Read tests that reading data from the blockchain works as
 // expected.
-func ExampleRelayer_Read() {
+func ExampleRelayer_Read(data string) {
 	// Example usage
 	relayer, err := relayer.NewRelayer(ExampleConfig)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	_, err = relayer.Write(bobPrivateKey, internalPrivateKey, PROTOCOL_ID, []byte("rollkit-btc: gm"))
+	_, err = relayer.Write(bobPrivateKey, internalPrivateKey, PROTOCOL_ID, []byte(data))
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -42,8 +42,7 @@ func ExampleRelayer_Read() {
 	// TODO: either mock or generate block
 	// We're assuming the prev tx was mined at height 146
 
-	height := uint64(146)
-	blobs, err := relayer.Read(PROTOCOL_ID, height)
+	blobs, err := relayer.Read(PROTOCOL_ID)
 	// Print the blobs
 	if err != nil {
 		fmt.Println(err)

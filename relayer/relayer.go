@@ -212,8 +212,10 @@ func (r Relayer) ReadTransaction(PROTOCOL_ID []byte, hash *chainhash.Hash) ([]by
 	return nil, nil
 }
 
-func (r Relayer) Read(PROTOCOL_ID []byte, height uint64) ([][]byte, error) {
-	hash, err := r.client.GetBlockHash(int64(height))
+func (r Relayer) Read(PROTOCOL_ID []byte) ([][]byte, error) {
+	height, err := r.client.GetBlockCount()
+
+	hash, err := r.client.GetBlockHash(height)
 	if err != nil {
 		return nil, err
 	}
