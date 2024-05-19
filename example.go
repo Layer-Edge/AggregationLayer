@@ -7,6 +7,19 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
+var ExampleConfig = relayer.Config{
+	Host:         cfg.Relayer.Host,
+	User:         cfg.Relayer.User,
+	Pass:         cfg.Relayer.Pass,
+	HTTPPostMode: true,
+	DisableTLS:   true,
+}
+
+var (
+	bobPrivateKey      = cfg.PrivateKey.Signer
+	internalPrivateKey = cfg.PrivateKey.Internal
+)
+
 func ExampleRelayer_Write(data string) {
 	// Example usage
 	relayer, err := relayer.NewRelayer(ExampleConfig)
