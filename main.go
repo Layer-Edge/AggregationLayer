@@ -8,43 +8,32 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
 // PROTOCOL_ID allows data identification by looking at the first few bytes
-var PROTOCOL_ID = []byte{0x72, 0x6f, 0x6c, 0x6c}
-
-// Sample data and keys for testing.
-// bob key pair is used for signing reveal tx
-// internal key pair is used for tweaking
 var (
-	bobPrivateKey      = "cPbxEJ3UTLAeKzebFy6G38Qr7X5UqjcWv93PkhPJ52hoy9RtNkKD"
-	internalPrivateKey = "cNR4CfUPBZNEZE9rShP4ix2NRPUNFfmDjecG7W9ySpupjGTMUKbw"
+	PROTOCOL_ID []byte
+	cfg         = config.GetConfig()
 )
 
-var LayerEdgeRPC = struct {
-	WSS  string
-	HTTP string
-}{
-	WSS:  "wss://testnet-rpc.layeredge.io/ws",
-	HTTP: "https://testnet-rpc.layeredge.io/http",
-}
-
-var ExampleConfig = relayer.Config{
-	Host:         "localhost:18443",
-	User:         "jeet",
-	Pass:         "SzKyQMucjU9pd6om64xcuMiEp4FqDtKAn_Q6QA16e6k",
-	HTTPPostMode: true,
-	DisableTLS:   true,
-}
-
 func main() {
-	client, err := ethclient.Dial(LayerEdgeRPC.WSS)
+	PROTOCOL_ID = []byte(cfg.ProtocolId)
+	fmt.Printf("%+v\n%+v\n", cfg, PROTOCOL_ID)
+
+	client, err := ethclient.Dial(cfg.LayerEdgeRPC.WSS)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	relayer, err := relayer.NewRelayer(ExampleConfig)
+	relayer, err := relayer.NewRelayer(relayer.Config{
+		Host:         cfg.Relayer.Host,
+		User:         cfg.Relayer.User,
+		Pass:         cfg.Relayer.Pass,
+		HTTPPostMode: true,
+		DisableTLS:   true,
+	})
 	if err != nil {
 		fmt.Println(err)
 		return

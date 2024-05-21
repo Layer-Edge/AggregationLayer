@@ -7,18 +7,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+
+	"github.com/Layer-Edge/bitcoin-da/config"
 )
 
-var LayerEdgeRPC = struct {
-	WSS  string
-	HTTP string
-}{
-	WSS:  "wss://testnet-rpc.layeredge.io/ws",
-	HTTP: "https://testnet-rpc.layeredge.io/http",
-}
+var cfg = config.GetConfig()
 
 func SubscribeToBlocks() {
-	client, err := ethclient.Dial(LayerEdgeRPC.WSS)
+	client, err := ethclient.Dial(cfg.LayerEdgeRPC.WSS)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +47,7 @@ func SubscribeToBlocks() {
 }
 
 func ReadBlocks() {
-	client, err := ethclient.Dial(LayerEdgeRPC.HTTP)
+	client, err := ethclient.Dial(cfg.LayerEdgeRPC.HTTP)
 	if err != nil {
 		log.Fatal(err)
 	}
