@@ -14,17 +14,25 @@ type Config struct {
 		HTTP string `yaml:"http"`
 		WSS  string `yaml:"wss"`
 	} `yaml:"layer-edge-rpc"`
+
 	PrivateKey struct {
 		// internal key pair is used for tweaking
 		Internal string `yaml:"internal"`
 		// bob key pair is used for signing reveal tx
 		Signer string `yaml:"signer"`
 	} `yaml:"private-key"`
-	Relayer struct {
+
+	WalletRelayer struct {
 		Host string `yaml:"host"`
 		User string `yaml:"user"`
 		Pass string `yaml:"pass"`
-	} `yaml:"relayer"`
+	} `yaml:"wallet-relayer"`
+
+	WsRelayer struct {
+		Host string `yaml:"host"`
+		User string `yaml:"user"`
+		Pass string `yaml:"pass"`
+	} `yaml:"ws-relayer"`
 }
 
 func readFile(cfg *Config) {
@@ -54,30 +62,14 @@ func readEnv(cfg *Config) {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	protocolId := os.Getenv("PROTOCOL_ID")
 	privateKeyInternal := os.Getenv("PRIVATE_KEY_INTERNAL")
 	privateKeySigner := os.Getenv("PRIVATE_KEY_SIGNER")
-	host := os.Getenv("RELAYER_HOST")
-	user := os.Getenv("RELAYER_USER")
-	pass := os.Getenv("RELAYER_PASS")
 
-	if protocolId != "" {
-		cfg.ProtocolId = protocolId
-	}
 	if privateKeyInternal != "" {
 		cfg.PrivateKey.Internal = privateKeyInternal
 	}
 	if privateKeySigner != "" {
 		cfg.PrivateKey.Signer = privateKeySigner
-	}
-	if host != "" {
-		cfg.Relayer.Host = host
-	}
-	if user != "" {
-		cfg.Relayer.User = user
-	}
-	if pass != "" {
-		cfg.Relayer.Pass = pass
 	}
 
 	if err != nil {

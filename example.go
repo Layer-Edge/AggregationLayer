@@ -8,9 +8,9 @@ import (
 )
 
 var ExampleConfig = relayer.Config{
-	Host:         cfg.Relayer.Host,
-	User:         cfg.Relayer.User,
-	Pass:         cfg.Relayer.Pass,
+	Host:         cfg.WalletRelayer.Host,
+	User:         cfg.WalletRelayer.User,
+	Pass:         cfg.WalletRelayer.Pass,
 	HTTPPostMode: true,
 	DisableTLS:   true,
 }
@@ -22,7 +22,7 @@ var (
 
 func ExampleRelayer_Write(data string) {
 	// Example usage
-	relayer, err := relayer.NewRelayer(ExampleConfig)
+	relayer, err := relayer.NewRelayer(ExampleConfig, nil)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -42,7 +42,7 @@ func ExampleRelayer_Write(data string) {
 // expected.
 func ExampleRelayer_Read(data string) {
 	// Example usage
-	relayer, err := relayer.NewRelayer(ExampleConfig)
+	relayer, err := relayer.NewRelayer(ExampleConfig, nil)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -54,8 +54,7 @@ func ExampleRelayer_Read(data string) {
 	}
 	// TODO: either mock or generate block
 	// We're assuming the prev tx was mined at height 146
-
-	blobs, err := relayer.Read(PROTOCOL_ID)
+	blobs, err := relayer.Read(PROTOCOL_ID, 146)
 	// Print the blobs
 	if err != nil {
 		fmt.Println(err)

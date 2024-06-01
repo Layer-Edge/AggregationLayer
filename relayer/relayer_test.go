@@ -30,7 +30,7 @@ var ExampleConfig = bitcoinda.Config{
 // expected.
 func ExampleRelayer_Write() {
 	// Example usage
-	relayer, err := bitcoinda.NewRelayer(ExampleConfig)
+	relayer, err := bitcoinda.NewRelayer(ExampleConfig, nil)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -50,7 +50,7 @@ func ExampleRelayer_Write() {
 // expected.
 func ExampleRelayer_Read() {
 	// Example usage
-	relayer, err := bitcoinda.NewRelayer(ExampleConfig)
+	relayer, err := bitcoinda.NewRelayer(ExampleConfig, nil)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -62,8 +62,7 @@ func ExampleRelayer_Read() {
 	}
 	// TODO: either mock or generate block
 	// We're assuming the prev tx was mined at height 146
-	height := uint64(146)
-	blobs, err := relayer.Read(PROTOCOL_ID, height)
+	blobs, err := relayer.Read(PROTOCOL_ID, 146)
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -15,45 +15,29 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/utils"
 )
 
-type Config struct {
-	Host         string
-	User         string
-	Pass         string
-	HTTPPostMode bool
-	DisableTLS   bool
-}
+type Config = rpcclient.ConnConfig
 
 // Relayer is a bitcoin client wrapper which provides reader and writer methods
 // to write binary blobs to the blockchain.
 type Relayer struct {
-	client *rpcclient.Client
+	Client *rpcclient.Client
 }
 
 // NewRelayer returns a new relayer. It can error if there's an RPC connection
 // error with the connection config.
-func NewRelayer(config Config) (*Relayer, error) {
-	// Set up the connection to the btcd RPC server.
-	// NOTE: for testing bitcoind can be used in regtest with the following params -
-	// bitcoind -chain=regtest -rpcport=18332 -rpcuser=rpcuser -rpcpassword=rpcpass -fallbackfee=0.000001 -txindex=1
-	connCfg := &rpcclient.ConnConfig{
-		Host:         config.Host,
-		User:         config.User,
-		Pass:         config.Pass,
-		HTTPPostMode: config.HTTPPostMode,
-		DisableTLS:   config.DisableTLS,
-	}
-	client, err := rpcclient.New(connCfg, nil)
+func NewRelayer(connCfg Config, ntfnHandlers *rpcclient.NotificationHandlers) (*Relayer, error) {
+	client, err := rpcclient.New(&connCfg, ntfnHandlers)
 	if err != nil {
 		return nil, fmt.Errorf("error creating btcd RPC client: %v", err)
 	}
 	return &Relayer{
-		client: client,
+		Client: client,
 	}, nil
 }
 
 // close shuts down the client.
 func (r Relayer) close() {
-	r.client.Shutdown()
+	r.Client.Shutdown()
 }
 
 // commitTx commits an output to the given taproot address, such that the
@@ -72,7 +56,7 @@ func (r Relayer) commitTx(addr string) (*chainhash.Hash, error) {
 		return nil, fmt.Errorf("error creating new amount: %v", err)
 	}
 
-	hash, err := r.client.SendToAddress(address, amount)
+	hash, err := r.Client.SendToAddress(address, amount)
 	// Print address to send
 	fmt.Println("Address to send:", address.EncodeAddress())
 	if err != nil {
@@ -86,7 +70,7 @@ func (r Relayer) commitTx(addr string) (*chainhash.Hash, error) {
 // script satisfying the tapscript spend path, posts the embedded data on
 // chain. It returns the hash of the reveal transaction and error, if any.
 func (r Relayer) revealTx(bobPrivateKey, internalPrivateKey string, embeddedData []byte, commitHash *chainhash.Hash) (*chainhash.Hash, error) {
-	rawCommitTx, err := r.client.GetRawTransaction(commitHash)
+	rawCommitTx, err := r.Client.GetRawTransaction(commitHash)
 	if err != nil {
 		return nil, fmt.Errorf("error getting raw commit tx: %v", err)
 	}
@@ -186,7 +170,7 @@ func (r Relayer) revealTx(bobPrivateKey, internalPrivateKey string, embeddedData
 		sig, pkScript, ctrlBlockBytes,
 	}
 
-	hash, err := r.client.SendRawTransaction(tx, false)
+	hash, err := r.Client.SendRawTransaction(tx, false)
 	if err != nil {
 		return nil, fmt.Errorf("error sending reveal transaction: %v", err)
 	}
@@ -194,7 +178,7 @@ func (r Relayer) revealTx(bobPrivateKey, internalPrivateKey string, embeddedData
 }
 
 func (r Relayer) ReadTransaction(PROTOCOL_ID []byte, hash *chainhash.Hash) ([]byte, error) {
-	tx, err := r.client.GetRawTransaction(hash)
+	tx, err := r.Client.GetRawTransaction(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -212,14 +196,30 @@ func (r Relayer) ReadTransaction(PROTOCOL_ID []byte, hash *chainhash.Hash) ([]by
 	return nil, nil
 }
 
-func (r Relayer) Read(PROTOCOL_ID []byte) ([][]byte, error) {
-	height, err := r.client.GetBlockCount()
+func (r Relayer) ReadFromTxns(PROTOCOL_ID []byte, txns []*btcutil.Tx) ([][]byte, error) {
+	var data [][]byte
+	for _, tx := range txns {
+		if len(tx.MsgTx().TxIn[0].Witness) > 1 {
+			witness := tx.MsgTx().TxIn[0].Witness[1]
+			pushData, err := utils.ExtractPushData(0, witness)
+			if err != nil {
+				return nil, err
+			}
+			// skip PROTOCOL_ID
+			if pushData != nil && bytes.HasPrefix(pushData, PROTOCOL_ID) {
+				data = append(data, pushData[4:])
+			}
+		}
+	}
+	return data, nil
+}
 
-	hash, err := r.client.GetBlockHash(height)
+func (r Relayer) Read(PROTOCOL_ID []byte, height int64) ([][]byte, error) {
+	hash, err := r.Client.GetBlockHash(height)
 	if err != nil {
 		return nil, err
 	}
-	block, err := r.client.GetBlock(hash)
+	block, err := r.Client.GetBlock(hash)
 	if err != nil {
 		return nil, err
 	}
