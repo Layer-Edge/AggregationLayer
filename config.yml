@@ -13,9 +13,9 @@ private-key:
   signer: "get-from-env" # PRIVATE_KEY_SIGNER
 
 wallet-relayer:
-  host: "localhost:18332" # WALLET_RELAYER_HOST
+  host: "localhost:18443" # WALLET_RELAYER_HOST
   user: "jeet" # WALLET_RELAYER_USER 
-  pass: "CvfIUhldPYHVVrdLzbRXQ6PKKcg=" # WALLET_RELAYER_PASS
+  pass: "SzKyQMucjU9pd6om64xcuMiEp4FqDtKAn_Q6QA16e6k" # WALLET_RELAYER_PASS
 
 ws-relayer:
   host: "localhost:18334" # WS_RELAYER_HOST
