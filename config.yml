@@ -5,8 +5,8 @@
 protocol-id: "layer-edge" # PROTOCOL_ID
 
 layer-edge-rpc:
-  http: "https://testnet-rpc.layeredge.io/http" 
-  wss: "wss://testnet-rpc.layeredge.io/ws"
+  http: "https://testnet-rpc.layeredge.io/" 
+  wss: "wss://testnet-rpc.layeredge.io/"
 
 private-key:
   internal: "get-from-env" # PRIVATE_KEY_INTERNAL
