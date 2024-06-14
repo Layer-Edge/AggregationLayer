@@ -1,4 +1,4 @@
-package notification_service
+package da
 
 import (
 	"context"
@@ -8,19 +8,16 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"gopkg.in/zeromq/goczmq.v4"
 
-	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
 // PROTOCOL_ID allows data identification by looking at the first few bytes
 var (
-	PROTOCOL_ID = []byte(config.GetConfig().ProtocolId)
-	cfg         = config.GetConfig()
 	everyXblock = 10
 )
 
-func ZeromqBlockSubscriber() {
-	channeler := goczmq.NewSubChanneler("tcp://127.0.0.1:28332", "hashblock")
+func HashBlockSubscriber() {
+	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpoint, "hashblock")
 
 	if channeler == nil {
 		log.Fatal("Error creating channeler", channeler)
@@ -28,9 +25,9 @@ func ZeromqBlockSubscriber() {
 	defer channeler.Destroy()
 
 	relayer, err := relayer.NewRelayer(relayer.Config{
-		Host:         cfg.WalletRelayer.Host,
-		User:         cfg.WalletRelayer.User,
-		Pass:         cfg.WalletRelayer.Pass,
+		Host:         cfg.Relayer.Host,
+		User:         cfg.Relayer.User,
+		Pass:         cfg.Relayer.Pass,
 		DisableTLS:   true,
 		HTTPPostMode: true,
 	}, nil)

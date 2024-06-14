@@ -2,22 +2,19 @@
 # the following config can be overridden by environment variables
 # env name defined after "#"
 
-protocol-id: "layer-edge" # PROTOCOL_ID
+protocol-id: "lEdge" # PROTOCOL_ID
 
 layer-edge-rpc:
   http: "https://testnet-rpc.layeredge.io/" 
   wss: "wss://testnet-rpc.layeredge.io/"
 
+zmq-endpoint: "tcp://127.0.0.1:28332"
+
 private-key:
   internal: "get-from-env" # PRIVATE_KEY_INTERNAL
   signer: "get-from-env" # PRIVATE_KEY_SIGNER
 
-wallet-relayer:
-  host: "localhost:18443" # WALLET_RELAYER_HOST
-  user: "jeet" # WALLET_RELAYER_USER 
-  pass: "SzKyQMucjU9pd6om64xcuMiEp4FqDtKAn_Q6QA16e6k" # WALLET_RELAYER_PASS
-
-ws-relayer:
-  host: "localhost:18334" # WS_RELAYER_HOST
-  user: "jeet" # WS_RELAYER_USER 
-  pass: "CvfIUhldPYHVVrdLzbRXQ6PKKcg=" # WS_RELAYER_PASS
+relayer:
+  host: "localhost:18443" # RELAYER_HOST
+  user: "jeet" # RELAYER_USER 
+  pass: "SzKyQMucjU9pd6om64xcuMiEp4FqDtKAn_Q6QA16e6k" # RELAYER_PASS

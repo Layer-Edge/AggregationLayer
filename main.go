@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/Layer-Edge/bitcoin-da/notification_service"
+	"github.com/Layer-Edge/bitcoin-da/da"
 )
 
 func main() {
-	notification_service.ZeromqBlockSubscriber()
+	// da.HashBlockSubscriber()
+	da.RawBlockSubscriber()
 }
