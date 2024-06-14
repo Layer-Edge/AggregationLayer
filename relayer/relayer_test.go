@@ -8,7 +8,7 @@ import (
 )
 
 // PROTOCOL_ID allows data identification by looking at the first few bytes
-var PROTOCOL_ID = []byte{0x72, 0x6f, 0x6c, 0x6c}
+var PROTOCOL_ID = []byte{0x6C, 0x61, 0x79, 0x65, 0x72, 0x65, 0x64, 0x67, 0x65}
 
 // Sample data and keys for testing.
 // bob key pair is used for signing reveal tx

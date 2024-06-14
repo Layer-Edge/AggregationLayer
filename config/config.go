@@ -15,6 +15,8 @@ type Config struct {
 		WSS  string `yaml:"wss"`
 	} `yaml:"layer-edge-rpc"`
 
+	ZmqEndpoint string `yaml:"zmq-endpoint"`
+
 	PrivateKey struct {
 		// internal key pair is used for tweaking
 		Internal string `yaml:"internal"`
@@ -22,17 +24,11 @@ type Config struct {
 		Signer string `yaml:"signer"`
 	} `yaml:"private-key"`
 
-	WalletRelayer struct {
+	Relayer struct {
 		Host string `yaml:"host"`
 		User string `yaml:"user"`
 		Pass string `yaml:"pass"`
-	} `yaml:"wallet-relayer"`
-
-	WsRelayer struct {
-		Host string `yaml:"host"`
-		User string `yaml:"user"`
-		Pass string `yaml:"pass"`
-	} `yaml:"ws-relayer"`
+	} `yaml:"relayer"`
 }
 
 func readFile(cfg *Config) {
