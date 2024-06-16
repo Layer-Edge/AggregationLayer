@@ -8,15 +8,11 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"gopkg.in/zeromq/goczmq.v4"
 
+	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
-// PROTOCOL_ID allows data identification by looking at the first few bytes
-var (
-	everyXblock = 10
-)
-
-func HashBlockSubscriber() {
+func HashBlockSubscriber(cfg *config.Config) {
 	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpoint, "hashblock")
 
 	if channeler == nil {
@@ -43,7 +39,7 @@ func HashBlockSubscriber() {
 	counter := 0
 
 	// Listen for messages
-	fmt.Println("Listening for messages...")
+	fmt.Println("Listening for Hash Blocks (writer)...")
 	for {
 		select {
 		case msg, ok := <-channeler.RecvChan:
@@ -51,7 +47,7 @@ func HashBlockSubscriber() {
 				log.Println("Failed to receive message")
 				continue
 			}
-			if (counter % everyXblock) != 0 {
+			if (counter % cfg.WriteIntervalBlock) != 0 {
 				continue
 			}
 			if len(msg) != 3 {
@@ -61,11 +57,11 @@ func HashBlockSubscriber() {
 
 			// Split the message into topic, serialized transaction, and sequence number
 			topic := string(msg[0])
-			serializedTx := msg[1]
+			// serializedTx := msg[1]
 
 			// Print out the parts
 			fmt.Printf("Topic: %s\n", topic)
-			fmt.Printf("Serialized Transaction: %x\n", serializedTx) // Print as hex
+			// fmt.Printf("Serialized Transaction: %x\n", serializedTx) // Print as hex
 
 			layerEdgeHeader, err := layerEdgeClient.HeaderByNumber(context.Background(), nil)
 			if err != nil {
@@ -77,7 +73,7 @@ func HashBlockSubscriber() {
 			hash, err := relayer.Write(
 				cfg.PrivateKey.Signer,
 				cfg.PrivateKey.Internal,
-				PROTOCOL_ID,
+				[]byte(cfg.ProtocolId),
 				[]byte(layerEdgeHeader.Hash().Hex()),
 			)
 			if err != nil {

@@ -13,13 +13,7 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/utils"
 )
 
-// PROTOCOL_ID allows data identification by looking at the first few bytes
-var (
-	PROTOCOL_ID = []byte(config.GetConfig().ProtocolId)
-	cfg         = config.GetConfig()
-)
-
-func RawBlockSubscriber() {
+func RawBlockSubscriber(cfg *config.Config) {
 	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpoint, "rawblock")
 
 	if channeler == nil {
@@ -28,7 +22,7 @@ func RawBlockSubscriber() {
 	defer channeler.Destroy()
 
 	// Listen for messages
-	fmt.Println("Listening for messages...")
+	fmt.Println("Listening for Raw Blocks (reader)...")
 	for {
 		select {
 		case msg, ok := <-channeler.RecvChan:
@@ -54,12 +48,12 @@ func RawBlockSubscriber() {
 				log.Printf("Failed to parse transaction: %v", err)
 				continue
 			}
-			readPostedData(parsedBlock)
+			readPostedData(parsedBlock, []byte(cfg.ProtocolId))
 		}
 	}
 }
 
-func readPostedData(block *wire.MsgBlock) {
+func readPostedData(block *wire.MsgBlock, protocolId []byte) {
 	var blobs [][]byte
 	for _, tx := range block.Transactions {
 		if len(tx.TxIn[0].Witness) > 1 {
@@ -69,7 +63,7 @@ func readPostedData(block *wire.MsgBlock) {
 				log.Println("failed to extract push data", err)
 			}
 			// skip PROTOCOL_ID
-			if pushData != nil && bytes.HasPrefix(pushData, PROTOCOL_ID) {
+			if pushData != nil && bytes.HasPrefix(pushData, protocolId) {
 				blobs = append(blobs, pushData[:])
 			}
 		}
@@ -83,7 +77,7 @@ func readPostedData(block *wire.MsgBlock) {
 		data = append(data, string(got))
 	}
 
-	log.Println("\nRelayer Read: ", data)
+	log.Println("Relayer Read: ", data)
 }
 
 // parseBlock parses a serialized Bitcoin block

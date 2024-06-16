@@ -1,6 +1,8 @@
 package config
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -9,13 +11,18 @@ import (
 )
 
 type Config struct {
-	ProtocolId   string `yaml:"protocol-id"`
+	ProtocolId string `yaml:"protocol-id"`
+
+	ZmqEndpoint string `yaml:"zmq-endpoint"`
+
+	EnableWriter bool `yaml:"enable-writer"`
+
+	WriteIntervalBlock int `yaml:"write-interval-blocks"`
+
 	LayerEdgeRPC struct {
 		HTTP string `yaml:"http"`
 		WSS  string `yaml:"wss"`
 	} `yaml:"layer-edge-rpc"`
-
-	ZmqEndpoint string `yaml:"zmq-endpoint"`
 
 	PrivateKey struct {
 		// internal key pair is used for tweaking
@@ -31,25 +38,56 @@ type Config struct {
 	} `yaml:"relayer"`
 }
 
+// Define a command-line flag
+var IsWriter = flag.Bool(
+	"w",
+	false,
+	"Run DA Writer",
+)
+
+var ConfigFilePath = flag.String(
+	"c",
+	"config.yml",
+	"Specify the config path, default: 'config.yml' (root dir)",
+)
+
+func GetConfig() Config {
+	var cfg Config
+	flag.Parse()
+
+	readFile(&cfg)
+
+	if *IsWriter {
+		cfg.EnableWriter = true
+	}
+
+	readEnv(&cfg)
+
+	return cfg
+}
+
 func readFile(cfg *Config) {
 	var f *os.File
 	var err error
 
-	if len(os.Args) > 1 {
-		arg := os.Args[1]
-		f, err = os.Open(arg)
-	} else {
-		f, err = os.Open("config.yml")
-	}
+	f, err = os.Open(*ConfigFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf("Reading config: %v\n", *ConfigFilePath)
 	defer f.Close()
 
 	decoder := yaml.NewDecoder(f)
 	err = decoder.Decode(cfg)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if cfg.ProtocolId == "" {
+		log.Fatal("Protocol Id is required in config file")
+	}
+	if cfg.WriteIntervalBlock == 0 {
+		cfg.WriteIntervalBlock = 1 // defaults to 1
 	}
 }
 
@@ -71,11 +109,4 @@ func readEnv(cfg *Config) {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func GetConfig() Config {
-	var cfg Config
-	readFile(&cfg)
-	readEnv(&cfg)
-	return cfg
 }

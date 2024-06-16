@@ -1,75 +1,42 @@
 bitcoin-da:
 ===========
-
-
 This package provides a reader / writer interface to bitcoin.
 
-Example:
+# Timestamping Module
+
+In this project, we aim to create a module that regularly updates the state of one chain onto another chain. In this case, the chains being LayerEdge and Bitcoin, we aim to post the latest state root of the LayerEdge chain onto the Bitcoin chain as an inscription which allows for later verification of the same.
+
+## Config
+
+```
+Usage: ./bitcoin-da [options]
+Options:
+  -c
+        config path (default: config.yml)
+  -w
+        Run Writer Service (default: reader service)
+```
+
+- [default config file](./config.yml) defines the main configuration to run the project
+- set custom config path with flag `-c`. eg. ` -c ./custom-config.yml`
+- by default project runs with the reader service 
+- switch to writer service by config change `enable-writer: true` or use flag `-w`
+
+Services:
 ========
 
-	// ExampleRelayer_Read tests that reading data from the blockchain works as
-	// expected.
-	func ExampleRelayer_Read() {
-		// Example usage
-		relayer, err := bitcoinda.NewRelayer(bitcoinda.Config{
-			Host:         "localhost:18332",
-			User:         "rpcuser",
-			Pass:         "rpcpass",
-			HTTPPostMode: true,
-			DisableTLS:   true,
-		})
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		_, err = relayer.Write([]byte("rollkit-btc: gm"))
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		// TODO: either mock or generate block
-		// We're assuming the prev tx was mined at height 146
-		height := uint64(146)
-		blobs, err := relayer.Read(height)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		for _, blob := range blobs {
-			got, err := hex.DecodeString(fmt.Sprintf("%x", blob))
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			fmt.Println(string(got))
-		}
-		// Output: rollkit-btc: gm
-	}
+### [Writer](./docs/writer-service.md)
 
-Tests:
-======
+`go build && ./bitcoin-da -w` or `go run . -w`
 
-Running the tests requires a local regtest node.
+In the writer service, we listen to state proofs posted by the LayerEdge chain and write the latest proof onto the bitcoin chain every 1 hour. For this we perform the following tasks:
+* Open a relayer connection to a bitcoin node service
+* Open a websocket connection to the LayerEdge chain to listen to latest blocks
+* Every one hour, take the latest confirmed state proof of the LayerEdge chain
+* With the above state root, we create an inscription containing the state proof
+* Finally we post the inscription onto the bitcoin chain using a commit reveal scheme 
 
-	bitcoind -chain=regtest -rpcport=18332 -rpcuser=rpcuser -rpcpassword=rpcpass -fallbackfee=0.000001 -txindex=1
-
-	bitcoin-cli -regtest -rpcport=18332 -rpcuser=rpcuser -rpcpassword=rpcpass createwallet w1
-
-	export COINBASE=$(bitcoin-cli -regtest -rpcport=18332 -rpcuser=rpcuser -rpcpassword=rpcpass getnewaddress)
-
-	bitcoin-cli -regtest -rpcport=18332 -rpcuser=rpcuser -rpcpassword=rpcpass generatetoaddress 101 $COINBASE
-
-Idle for a while till coinbase coins mature.
-
-	=== RUN   ExampleRelayer_Write
-	--- PASS: ExampleRelayer_Write (0.13s)
-	=== RUN   ExampleRelayer_Read
-	--- PASS: ExampleRelayer_Read (0.10s)
-	PASS
-	ok      github.com/rollkit/bitcoin-da   0.375s
-
-Writer:
-=======
+The inscription posted has an 'ID' appended in order to be able to easily read the inscription later.
 
 A commit transaction containing a taproot with one leaf script
 
@@ -88,8 +55,16 @@ A reveal transaction then posts the embedded data on chain and spends the
 commit output.
 
 
-Reader:
-========
+### [Reader](./docs/reader-service.md)
+
+`go build && ./bitcoin-da`  or  `go run .`
+
+In the Reader service, we provide a way to listen to inscriptions being posted onto the bitcoin chain. We do this by listening to all transactions and go through each one looking for an inscription that matches the "PROTOCOL_ID" that posted it. These are the following steps we take to get this done
+* Open a websocket connection to a bitcoin node
+* Listen to new blocks being produced
+* Go through all the transaction once we recieve block data of the latest block
+* Check if any transaction begins with PROTOCOL_ID
+* Print out the inscription
 
 The address of the reveal transaction is implicity used as a namespace.
 
