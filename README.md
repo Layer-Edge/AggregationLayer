@@ -6,6 +6,12 @@ This package provides a reader / writer interface to bitcoin.
 
 In this project, we aim to create a module that regularly updates the state of one chain onto another chain. In this case, the chains being LayerEdge and Bitcoin, we aim to post the latest state root of the LayerEdge chain onto the Bitcoin chain as an inscription which allows for later verification of the same.
 
+## Installation
+
+- [Install ZeroMQ](https://zeromq.org/download/)
+- [Install CZMQ](https://zeromq.org/languages/c/)
+
+
 ## Config
 
 ```
