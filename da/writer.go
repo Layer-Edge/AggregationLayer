@@ -27,6 +27,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		DisableTLS:   true,
 		HTTPPostMode: true,
 	}, nil)
+	err = relayer.Client.Ping()
 	if err != nil {
 		log.Fatal("Error creating http relayer: ", err)
 	}
@@ -48,6 +49,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 				continue
 			}
 			if (counter % cfg.WriteIntervalBlock) != 0 {
+				counter++
 				continue
 			}
 			if len(msg) != 3 {
