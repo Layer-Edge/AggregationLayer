@@ -7,17 +7,20 @@ zmq-endpoint: "tcp://127.0.0.1:28332" # "13.60.51.28"
 # Writer Only  -----
 enable-writer: false # run writer service
 
-write-interval-blocks: 10 # configure write op. frequency
+write-interval-blocks: 1 # configure write op. frequency
 
 layer-edge-rpc:
   http: "https://testnet-rpc.layeredge.io/" 
   wss: "wss://testnet-rpc.layeredge.io/"
 
 private-key:
-  internal: "get-from-env" # PRIVATE_KEY_INTERNAL
-  signer: "get-from-env" # PRIVATE_KEY_SIGNER
+  internal: "cNR4CfUPBZNEZE9rShP4ix2NRPUNFfmDjecG7W9ySpupjGTMUKbw"
+  signer: "cPbxEJ3UTLAeKzebFy6G38Qr7X5UqjcWv93PkhPJ52hoy9RtNkKD"
 
 relayer:
+  # host: "13.60.51.28:18332"
+  # user: "layeredge"
+  # pass: "82axtQEWeWRal4P2-hXD6-RQnp-di7MLGFVlIBJfH1E"
   host: "localhost:18443" 
   user: "jeet" 
   pass: "SzKyQMucjU9pd6om64xcuMiEp4FqDtKAn_Q6QA16e6k" 

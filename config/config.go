@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v2"
 )
 
@@ -61,8 +60,6 @@ func GetConfig() Config {
 		cfg.EnableWriter = true
 	}
 
-	readEnv(&cfg)
-
 	return cfg
 }
 
@@ -88,25 +85,5 @@ func readFile(cfg *Config) {
 	}
 	if cfg.WriteIntervalBlock == 0 {
 		cfg.WriteIntervalBlock = 1 // defaults to 1
-	}
-}
-
-func readEnv(cfg *Config) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	privateKeyInternal := os.Getenv("PRIVATE_KEY_INTERNAL")
-	privateKeySigner := os.Getenv("PRIVATE_KEY_SIGNER")
-
-	if privateKeyInternal != "" {
-		cfg.PrivateKey.Internal = privateKeyInternal
-	}
-	if privateKeySigner != "" {
-		cfg.PrivateKey.Signer = privateKeySigner
-	}
-
-	if err != nil {
-		log.Fatal(err)
 	}
 }
