@@ -40,6 +40,50 @@ func (r Relayer) close() {
 	r.Client.Shutdown()
 }
 
+func (r Relayer) Read(PROTOCOL_ID []byte, height int64) ([][]byte, error) {
+	hash, err := r.Client.GetBlockHash(height)
+	if err != nil {
+		return nil, err
+	}
+	block, err := r.Client.GetBlock(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	var data [][]byte
+	for _, tx := range block.Transactions {
+		if len(tx.TxIn[0].Witness) > 1 {
+			witness := tx.TxIn[0].Witness[1]
+			pushData, err := utils.ExtractPushData(0, witness)
+			if err != nil {
+				return nil, err
+			}
+			// skip PROTOCOL_ID
+			if pushData != nil && bytes.HasPrefix(pushData, PROTOCOL_ID) {
+				data = append(data, pushData[4:])
+			}
+		}
+	}
+	return data, nil
+}
+
+func (r Relayer) Write(bobPrivateKey, internalPrivateKey string, PROTOCOL_ID []byte, data []byte) (*chainhash.Hash, error) {
+	data = append(PROTOCOL_ID, data...)
+	address, err := utils.CreateTaprootAddress(bobPrivateKey, internalPrivateKey, data)
+	if err != nil {
+		return nil, err
+	}
+	hash, err := r.commitTx(address)
+	if err != nil {
+		return nil, err
+	}
+	hash, err = r.revealTx(bobPrivateKey, internalPrivateKey, data, hash)
+	if err != nil {
+		return nil, err
+	}
+	return hash, nil
+}
+
 // commitTx commits an output to the given taproot address, such that the
 // output is only spendable by posting the embedded data on chain, as part of
 // the script satisfying the tapscript spend path that commits to the data. It
@@ -173,87 +217,6 @@ func (r Relayer) revealTx(bobPrivateKey, internalPrivateKey string, embeddedData
 	hash, err := r.Client.SendRawTransaction(tx, false)
 	if err != nil {
 		return nil, fmt.Errorf("error sending reveal transaction: %v", err)
-	}
-	return hash, nil
-}
-
-func (r Relayer) ReadTransaction(PROTOCOL_ID []byte, hash *chainhash.Hash) ([]byte, error) {
-	tx, err := r.Client.GetRawTransaction(hash)
-	if err != nil {
-		return nil, err
-	}
-	if len(tx.MsgTx().TxIn[0].Witness) > 1 {
-		witness := tx.MsgTx().TxIn[0].Witness[1]
-		pushData, err := utils.ExtractPushData(0, witness)
-		if err != nil {
-			return nil, err
-		}
-		// skip PROTOCOL_ID
-		if pushData != nil && bytes.HasPrefix(pushData, PROTOCOL_ID) {
-			return pushData[4:], nil
-		}
-	}
-	return nil, nil
-}
-
-func (r Relayer) ReadFromTxns(PROTOCOL_ID []byte, txns []*btcutil.Tx) ([][]byte, error) {
-	var data [][]byte
-	for _, tx := range txns {
-		if len(tx.MsgTx().TxIn[0].Witness) > 1 {
-			witness := tx.MsgTx().TxIn[0].Witness[1]
-			pushData, err := utils.ExtractPushData(0, witness)
-			if err != nil {
-				return nil, err
-			}
-			// skip PROTOCOL_ID
-			if pushData != nil && bytes.HasPrefix(pushData, PROTOCOL_ID) {
-				data = append(data, pushData[4:])
-			}
-		}
-	}
-	return data, nil
-}
-
-func (r Relayer) Read(PROTOCOL_ID []byte, height int64) ([][]byte, error) {
-	hash, err := r.Client.GetBlockHash(height)
-	if err != nil {
-		return nil, err
-	}
-	block, err := r.Client.GetBlock(hash)
-	if err != nil {
-		return nil, err
-	}
-
-	var data [][]byte
-	for _, tx := range block.Transactions {
-		if len(tx.TxIn[0].Witness) > 1 {
-			witness := tx.TxIn[0].Witness[1]
-			pushData, err := utils.ExtractPushData(0, witness)
-			if err != nil {
-				return nil, err
-			}
-			// skip PROTOCOL_ID
-			if pushData != nil && bytes.HasPrefix(pushData, PROTOCOL_ID) {
-				data = append(data, pushData[4:])
-			}
-		}
-	}
-	return data, nil
-}
-
-func (r Relayer) Write(bobPrivateKey, internalPrivateKey string, PROTOCOL_ID []byte, data []byte) (*chainhash.Hash, error) {
-	data = append(PROTOCOL_ID, data...)
-	address, err := utils.CreateTaprootAddress(bobPrivateKey, internalPrivateKey, data)
-	if err != nil {
-		return nil, err
-	}
-	hash, err := r.commitTx(address)
-	if err != nil {
-		return nil, err
-	}
-	hash, err = r.revealTx(bobPrivateKey, internalPrivateKey, data, hash)
-	if err != nil {
-		return nil, err
 	}
 	return hash, nil
 }
