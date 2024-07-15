@@ -76,7 +76,7 @@ func CreateTaprootAddress(bobPrivateKey, internalPrivateKey string, embeddedData
 
 	// Step 3: Generate the Bech32m address.
 	address, err := btcutil.NewAddressTaproot(
-		schnorr.SerializePubKey(outputKey), &chaincfg.RegressionNetParams)
+		schnorr.SerializePubKey(outputKey), &chaincfg.SigNetParams)
 	if err != nil {
 		return "", fmt.Errorf("error encoding Taproot address: %v", err)
 	}

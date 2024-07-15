@@ -21,6 +21,6 @@ relayer:
   # host: "13.60.51.28:18332"
   # user: "layeredge"
   # pass: "82axtQEWeWRal4P2-hXD6-RQnp-di7MLGFVlIBJfH1E"
-  host: "localhost:18443" 
+  host: "localhost:38332" 
   user: "jeet" 
   pass: "SzKyQMucjU9pd6om64xcuMiEp4FqDtKAn_Q6QA16e6k" 

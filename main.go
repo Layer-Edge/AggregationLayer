@@ -9,8 +9,8 @@ var cfg = config.GetConfig()
 
 func main() {
 	if cfg.EnableWriter {
-		da.HashBlockSubscriber(&cfg)
+		da.WriterSubscriber(&cfg)
 	} else {
-		da.RawBlockSubscriber(&cfg)
+		da.ReadSubscriber(&cfg)
 	}
 }

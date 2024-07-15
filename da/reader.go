@@ -13,7 +13,7 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/utils"
 )
 
-func RawBlockSubscriber(cfg *config.Config) {
+func ReadSubscriber(cfg *config.Config) {
 	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpoint, "rawblock")
 
 	if channeler == nil {

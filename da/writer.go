@@ -12,7 +12,7 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
-func HashBlockSubscriber(cfg *config.Config) {
+func WriterSubscriber(cfg *config.Config) {
 	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpoint, "hashblock")
 
 	if channeler == nil {

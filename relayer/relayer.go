@@ -90,7 +90,7 @@ func (r Relayer) Write(bobPrivateKey, internalPrivateKey string, PROTOCOL_ID []b
 // returns the hash of the commit transaction and error, if any.
 func (r Relayer) commitTx(addr string) (*chainhash.Hash, error) {
 	// Create a transaction that sends 0.001 BTC to the given address.
-	address, err := btcutil.DecodeAddress(addr, &chaincfg.RegressionNetParams)
+	address, err := btcutil.DecodeAddress(addr, &chaincfg.SigNetParams)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding recipient address: %v", err)
 	}
