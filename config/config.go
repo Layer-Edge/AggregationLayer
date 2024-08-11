@@ -14,6 +14,9 @@ type Config struct {
 
 	ZmqEndpoint string `yaml:"zmq-endpoint"`
 
+	BtcCliPath string `yaml:"bitcoin-cli-path"`
+	BashScriptPath string `yaml:"bash-script-path"`
+
 	EnableWriter bool `yaml:"enable-writer"`
 
 	WriteIntervalBlock int `yaml:"write-interval-blocks"`
@@ -23,18 +26,18 @@ type Config struct {
 		WSS  string `yaml:"wss"`
 	} `yaml:"layer-edge-rpc"`
 
-	PrivateKey struct {
-		// internal key pair is used for tweaking
-		Internal string `yaml:"internal"`
-		// bob key pair is used for signing reveal tx
-		Signer string `yaml:"signer"`
-	} `yaml:"private-key"`
+	// PrivateKey struct {
+	// 	// internal key pair is used for tweaking
+	// 	Internal string `yaml:"internal"`
+	// 	// bob key pair is used for signing reveal tx
+	// 	Signer string `yaml:"signer"`
+	// } `yaml:"private-key"`
 
-	Relayer struct {
-		Host string `yaml:"host"`
-		User string `yaml:"user"`
-		Pass string `yaml:"pass"`
-	} `yaml:"relayer"`
+	// Relayer struct {
+	// 	Host string `yaml:"host"`
+	// 	User string `yaml:"user"`
+	// 	Pass string `yaml:"pass"`
+	// } `yaml:"relayer"`
 }
 
 // Define a command-line flag
@@ -60,7 +63,27 @@ func GetConfig() Config {
 		cfg.EnableWriter = true
 	}
 
+	// readEnv(&cfg)
+
 	return cfg
+}
+
+func validateConfig(cfg *Config) {
+	if cfg.ProtocolId == "" {
+		log.Fatal("Protocol Id is required in config file")
+	}
+
+	if cfg.BtcCliPath == "" {
+		log.Fatal("Bitcoin CLI Path not given")
+	}
+
+	if cfg.BashScriptPath == "" {
+		log.Fatal("Bash Script Path not given")
+	}
+
+	if cfg.WriteIntervalBlock == 0 {
+		cfg.WriteIntervalBlock = 1 // defaults to 1
+	}
 }
 
 func readFile(cfg *Config) {
@@ -80,10 +103,20 @@ func readFile(cfg *Config) {
 		log.Fatal(err)
 	}
 
-	if cfg.ProtocolId == "" {
-		log.Fatal("Protocol Id is required in config file")
-	}
-	if cfg.WriteIntervalBlock == 0 {
-		cfg.WriteIntervalBlock = 1 // defaults to 1
-	}
+	validateConfig(cfg)
 }
+
+// func readEnv(cfg *Config) {
+// 	err := godotenv.Load()
+// 	if err != nil {
+// 		log.Fatal("Error loading .env file")
+// 	}
+// 
+// 	cfg.PrivateKey.Internal = os.Getenv("PRIVATE_KEY_INTERNAL")
+// 	cfg.PrivateKey.Signer = os.Getenv("PRIVATE_KEY_SIGNER")
+// 	log.Println(cfg.PrivateKey.Internal, cfg.PrivateKey.Signer)
+// 
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// }

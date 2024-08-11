@@ -6,11 +6,14 @@ import (
 )
 
 var cfg = config.GetConfig()
+// var processor = store.GetProcessor(cfg)
+// var channelReader = store.GetChannelReader(cfg)
+// var relayer = store.GetRelayer(cfg)
 
 func main() {
 	if cfg.EnableWriter {
-		da.WriterSubscriber(&cfg)
+		da.HashBlockSubscriber(&cfg)
 	} else {
-		da.ReadSubscriber(&cfg)
+		da.RawBlockSubscriber(&cfg)
 	}
 }

@@ -76,7 +76,7 @@ func CreateTaprootAddress(bobPrivateKey, internalPrivateKey string, embeddedData
 
 	// Step 3: Generate the Bech32m address.
 	address, err := btcutil.NewAddressTaproot(
-		schnorr.SerializePubKey(outputKey), &chaincfg.SigNetParams)
+		schnorr.SerializePubKey(outputKey), &chaincfg.RegressionNetParams)
 	if err != nil {
 		return "", fmt.Errorf("error encoding Taproot address: %v", err)
 	}
@@ -93,48 +93,14 @@ func PayToTaprootScript(taprootKey *btcec.PublicKey) ([]byte, error) {
 }
 
 func ExtractPushData(version uint16, pkScript []byte) ([]byte, error) {
-	type templateMatch struct {
-		expectPushData bool
-		maxPushDatas   int
-		opcode         byte
-		extractedData  []byte
+	type OpData struct {
+		opcode byte
+		datalength byte
+		data []byte
 	}
-	template := [6]templateMatch{
-		{opcode: txscript.OP_FALSE},
-		{opcode: txscript.OP_IF},
-		{expectPushData: true, maxPushDatas: 10},
-		{opcode: txscript.OP_ENDIF},
-		{expectPushData: true, maxPushDatas: 1},
-		{opcode: txscript.OP_CHECKSIG},
+	result := OpData{pkScript[0], pkScript[1], pkScript[2:]}
+	if result.opcode != txscript.OP_RETURN {
+		return nil, nil
 	}
-
-	var templateOffset int
-	tokenizer := txscript.MakeScriptTokenizer(version, pkScript)
-out:
-	for tokenizer.Next() {
-		// Not a rollkit script if it has more opcodes than expected in the
-		// template.
-		if templateOffset >= len(template) {
-			return nil, nil
-		}
-
-		op := tokenizer.Opcode()
-		tplEntry := &template[templateOffset]
-		if tplEntry.expectPushData {
-			for i := 0; i < tplEntry.maxPushDatas; i++ {
-				data := tokenizer.Data()
-				if data == nil {
-					break out
-				}
-				tplEntry.extractedData = append(tplEntry.extractedData, data...)
-				tokenizer.Next()
-			}
-		} else if op != tplEntry.opcode {
-			return nil, nil
-		}
-
-		templateOffset++
-	}
-	// TODO: skipping err checks
-	return template[2].extractedData, nil
+	return result.data, nil
 }

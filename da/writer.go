@@ -4,33 +4,59 @@ import (
 	"context"
 	"fmt"
 	"log"
-
+	"os"
+	"os/exec"
+	"strings"
+	"encoding/hex"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"gopkg.in/zeromq/goczmq.v4"
 
 	"github.com/Layer-Edge/bitcoin-da/config"
-	"github.com/Layer-Edge/bitcoin-da/relayer"
 )
 
-func WriterSubscriber(cfg *config.Config) {
+// To be set from Config
+var (
+	BtcCliPath = ""
+	BashScriptPath = ""
+)
+
+func CallScriptWithData(data string) ([]byte, error) {
+	cmd := exec.Command(BashScriptPath + "/op_return_transaction.sh", data)
+	cmd.Env = os.Environ()
+    cmd.Env = append(cmd.Env, "BTC_CLI_PATH=" + BtcCliPath)
+	out,err := cmd.Output()
+	return out, err
+}
+
+func ProcessMsg(msg [][]byte, layerEdgeClient *ethclient.Client) ([]byte, error) {
+	// Split the message into topic, serialized transaction, and sequence number
+	topic := string(msg[0])
+
+	// Print out the parts
+	fmt.Printf("Topic: %s\n", topic)
+
+	layerEdgeHeader, err := layerEdgeClient.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		log.Println("Error getting layerEdgeHeader: ", err)
+		return nil, err
+	}
+	log.Println("Latest LayerEdge Block Hash:", layerEdgeHeader.Hash().Hex())
+
+	hash, err := CallScriptWithData(hex.EncodeToString(layerEdgeHeader.Hash().Bytes()))
+	return hash, err
+}
+
+func HashBlockSubscriber(cfg *config.Config) {
+	// Init varaibles
 	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpoint, "hashblock")
+
+	BashScriptPath = cfg.BashScriptPath
+	BtcCliPath = cfg.BtcCliPath
 
 	if channeler == nil {
 		log.Fatal("Error creating channeler", channeler)
 	}
 	defer channeler.Destroy()
-
-	relayer, err := relayer.NewRelayer(relayer.Config{
-		Host:         cfg.Relayer.Host,
-		User:         cfg.Relayer.User,
-		Pass:         cfg.Relayer.Pass,
-		DisableTLS:   true,
-		HTTPPostMode: true,
-	}, nil)
-	err = relayer.Client.Ping()
-	if err != nil {
-		log.Fatal("Error creating http relayer: ", err)
-	}
 
 	layerEdgeClient, err := ethclient.Dial(cfg.LayerEdgeRPC.HTTP)
 	if err != nil {
@@ -49,41 +75,20 @@ func WriterSubscriber(cfg *config.Config) {
 				continue
 			}
 			if (counter % cfg.WriteIntervalBlock) != 0 {
-				counter++
 				continue
 			}
 			if len(msg) != 3 {
 				log.Println("Received message with unexpected number of parts")
 				continue
 			}
-
-			// Split the message into topic, serialized transaction, and sequence number
-			topic := string(msg[0])
-			// serializedTx := msg[1]
-
-			// Print out the parts
-			fmt.Printf("Topic: %s\n", topic)
-			// fmt.Printf("Serialized Transaction: %x\n", serializedTx) // Print as hex
-
-			layerEdgeHeader, err := layerEdgeClient.HeaderByNumber(context.Background(), nil)
-			if err != nil {
-				log.Println("Error getting layerEdgeHeader: ", err)
-				continue
-			}
-			log.Println("Latest LayerEdge Block Hash:", layerEdgeHeader.Hash().Hex())
-
-			hash, err := relayer.Write(
-				cfg.PrivateKey.Signer,
-				cfg.PrivateKey.Internal,
-				[]byte(cfg.ProtocolId),
-				[]byte(layerEdgeHeader.Hash().Hex()),
-			)
+			// Process
+			hash, err := ProcessMsg(msg, layerEdgeClient)
 			if err != nil {
 				log.Println("Error writing -> ", err)
 				continue
 			}
 			counter++
-			log.Println("Relayer Write Done -> ", hash)
+			log.Println("Relayer Write Done -> ", strings.ReplaceAll(string(hash[:]), "\n",""))
 		}
 	}
 }
