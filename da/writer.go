@@ -28,7 +28,7 @@ func CallScriptWithData(data string) ([]byte, error) {
 	return out, err
 }
 
-func ProcessMsg(msg [][]byte, layerEdgeClient *ethclient.Client) ([]byte, error) {
+func ProcessMsg(msg [][]byte, protocolId string, layerEdgeClient *ethclient.Client) ([]byte, error) {
 	// Split the message into topic, serialized transaction, and sequence number
 	topic := string(msg[0])
 
@@ -40,9 +40,11 @@ func ProcessMsg(msg [][]byte, layerEdgeClient *ethclient.Client) ([]byte, error)
 		log.Println("Error getting layerEdgeHeader: ", err)
 		return nil, err
 	}
-	log.Println("Latest LayerEdge Block Hash:", layerEdgeHeader.Hash().Hex())
+	dhash := layerEdgeHeader.Hash()
+	log.Println("Latest LayerEdge Block Hash:", dhash.Hex())
 
-	hash, err := CallScriptWithData(hex.EncodeToString(layerEdgeHeader.Hash().Bytes()))
+	data := append([]byte(protocolId), dhash.Bytes()...)
+	hash, err := CallScriptWithData(hex.EncodeToString(data))
 	return hash, err
 }
 
@@ -82,7 +84,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 				continue
 			}
 			// Process
-			hash, err := ProcessMsg(msg, layerEdgeClient)
+			hash, err := ProcessMsg(msg, cfg.ProtocolId, layerEdgeClient)
 			if err != nil {
 				log.Println("Error writing -> ", err)
 				continue

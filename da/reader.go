@@ -130,21 +130,14 @@ func readPostedData(block *wire.MsgBlock, protocolId []byte) {
             if err != nil {
                 log.Println("failed to extract push data", err)
             }
-            // skip PROTOCOL_ID
-			log.Println("Data: ", pushData)
-            if pushData != nil {// && bytes.HasPrefix(pushData, protocolId) {
+            if pushData != nil && bytes.HasPrefix(pushData, protocolId) {
                 blobs = append(blobs, pushData[:])
             }
         }
     }
     var data []string
     for _, blob := range blobs {
-        // got, err := hex.DecodeString(fmt.Sprintf("%x", blob))
-        // if err != nil {
-        //    log.Fatal("Error decoding blob: ", err)
-        // }
-        // data = append(data, string(got))
-		data = append(data, fmt.Sprintf("%x", blob))
+		data = append(data, fmt.Sprintf("%s:%x", blob[:len(protocolId)], blob[len(protocolId):]))
     }
 
     log.Println("Relayer Read: ", data)
