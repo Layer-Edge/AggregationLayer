@@ -2,29 +2,29 @@ package da
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"gopkg.in/zeromq/goczmq.v4"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
-	"encoding/hex"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"gopkg.in/zeromq/goczmq.v4"
 
 	"github.com/Layer-Edge/bitcoin-da/config"
 )
 
 // To be set from Config
 var (
-	BtcCliPath = ""
+	BtcCliPath     = ""
 	BashScriptPath = ""
 )
 
 func CallScriptWithData(data string) ([]byte, error) {
-	cmd := exec.Command(BashScriptPath + "/op_return_transaction.sh", data)
+	cmd := exec.Command(BashScriptPath+"/op_return_transaction.sh", data)
 	cmd.Env = os.Environ()
-    cmd.Env = append(cmd.Env, "BTC_CLI_PATH=" + BtcCliPath)
-	out,err := cmd.Output()
+	cmd.Env = append(cmd.Env, "BTC_CLI_PATH="+BtcCliPath)
+	out, err := cmd.Output()
 	return out, err
 }
 
@@ -50,7 +50,7 @@ func ProcessMsg(msg [][]byte, protocolId string, layerEdgeClient *ethclient.Clie
 
 func HashBlockSubscriber(cfg *config.Config) {
 	// Init varaibles
-	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpoint, "hashblock")
+	channeler := goczmq.NewSubChanneler(cfg.ZmqEndpointHashBlock, "hashblock")
 
 	BashScriptPath = cfg.BashScriptPath
 	BtcCliPath = cfg.BtcCliPath
@@ -90,7 +90,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 				continue
 			}
 			counter++
-			log.Println("Relayer Write Done -> ", strings.ReplaceAll(string(hash[:]), "\n",""))
+			log.Println("Relayer Write Done -> ", strings.ReplaceAll(string(hash[:]), "\n", ""))
 		}
 	}
 }

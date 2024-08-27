@@ -10,7 +10,6 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/ethereum/go-ethereum v1.14.2
-	github.com/joho/godotenv v1.5.1
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/zeromq/goczmq.v4 v4.1.0
 )

@@ -16,7 +16,7 @@ import (
 func RawBlockSubscriber(cfg *config.Config) {
     channelReader := ZmqChannelReader{channeler : nil}
     processor := BitcoinBlockProcessor{}
-    if channelReader.subscribe(cfg.ZmqEndpoint, "rawblock") == false {
+    if channelReader.subscribe(cfg.ZmqEndpointRawBlock, "rawblock") == false {
         return
     }
 

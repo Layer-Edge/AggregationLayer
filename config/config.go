@@ -12,7 +12,8 @@ import (
 type Config struct {
 	ProtocolId string `yaml:"protocol-id"`
 
-	ZmqEndpoint string `yaml:"zmq-endpoint"`
+	ZmqEndpointRawBlock  string `yaml:"zmq-endpoint-raw-block"`
+	ZmqEndpointHashBlock string `yaml:"zmq-endpoint-hash-block"`
 
 	BtcCliPath string `yaml:"bitcoin-cli-path"`
 	BashScriptPath string `yaml:"bash-script-path"`
