@@ -28,6 +28,11 @@ type Config struct {
 		WSS  string `yaml:"wss"`
 	} `yaml:"layer-edge-rpc"`
 
+	Cosmos struct {
+		ChainID       string `yaml:"chainId"`
+		RpcEndpoint   string `yaml:"rpcEndpoint"`
+		AccountPrefix string `yaml:"accountPrefix"`
+	} `yaml:"cosmos"`
 	// PrivateKey struct {
 	// 	// internal key pair is used for tweaking
 	// 	Internal string `yaml:"internal"`

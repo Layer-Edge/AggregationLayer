@@ -5,6 +5,7 @@ import (
     "encoding/hex"
     "fmt"
     "github.com/ethereum/go-ethereum/ethclient"
+    "github.com/cosmos/cosmos-sdk/crypto/keyring"
     "log"
     "os"
     "os/exec"
@@ -61,6 +62,21 @@ func HashBlockSubscriber(cfg *config.Config) {
         return
     }
 
+    coscfg := CosmosClientConfig{
+        ChainID:        config.GetConfig().Cosmos.ChainID,
+        RPCEndpoint:    config.GetConfig().Cosmos.RpcEndpoint,
+        AccountPrefix:  config.GetConfig().Cosmos.AccountPrefix,
+        KeyringBackend: keyring.BackendTest,
+        KeyName:        "mykey", // Replace with actual key name
+        HomeDir:        "",      // Replace with actual home directory
+    }
+
+    client := &CosmosClient{}
+    err := client.Init(coscfg)
+    if err != nil {
+        log.Fatalf("Failed to initialize Cosmos client: %v", err)
+    }
+
     BashScriptPath = cfg.BashScriptPath
     BtcCliPath = cfg.BtcCliPath
 
@@ -98,6 +114,12 @@ func HashBlockSubscriber(cfg *config.Config) {
     }
 
     fnWrite := func(msg []byte) {
+        err = client.SendData(string(aggr.data[:]))
+        if err != nil {
+            log.Fatalf("Failed to send data: %v", err)
+            return
+        }
+
         prf := prf.GenerateAggregatedProof(aggr.data)
         aggr.data = nil
         log.Println("Aggregated Proof: ", prf)
