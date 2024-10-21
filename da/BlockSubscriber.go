@@ -1,0 +1,57 @@
+package da
+
+import (
+    // "encoding/hex"
+    "log"
+
+    "gopkg.in/zeromq/goczmq.v4"
+)
+
+type Lambda func([][]byte) bool
+
+type BlockSubscriber struct {
+    // Subscribe(endpoint string, filter string) bool
+    // Reset()
+    // GetMessage() (bool, [][]byte)
+    // Process(fn Lambda) (bool, [][]byte)
+
+    channeler* goczmq.Channeler
+}
+
+func (subr *BlockSubscriber) Subscribe(endpoint string, filter string) bool {
+    subr.channeler = goczmq.NewSubChanneler(endpoint, filter)
+    if subr.channeler == nil {
+        log.Fatal("Error creating channeler: ", endpoint, filter)
+        return false;
+    }
+    return true
+}
+
+func (subr *BlockSubscriber) Reset() {
+    if (subr.channeler != nil) {
+        subr.channeler.Destroy()
+    }
+}
+
+func (subr *BlockSubscriber) GetMessage() (bool, [][]byte) {
+    msg, ok := <-subr.channeler.RecvChan
+    return ok, msg
+}
+
+func (subr *BlockSubscriber) Validate(ok bool, msg [][]byte) bool {
+    // Validate
+    if !ok {
+        log.Println("Failed to receive message")
+        return false
+    }
+    if len(msg) != 3 {
+        log.Println("Received message with unexpected number of parts")
+        return false
+    }
+    return true
+}
+
+func (subr *BlockSubscriber) Process(fn Lambda, msg [][]byte) bool {
+    log.Println("Processing message")
+    return fn(msg)
+}

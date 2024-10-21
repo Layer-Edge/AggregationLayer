@@ -7,85 +7,43 @@ import (
     "log"
 
     "github.com/btcsuite/btcd/wire"
-    "gopkg.in/zeromq/goczmq.v4"
 
     "github.com/Layer-Edge/bitcoin-da/config"
     "github.com/Layer-Edge/bitcoin-da/utils"
 )
 
 func RawBlockSubscriber(cfg *config.Config) {
-    channelReader := ZmqChannelReader{channeler : nil}
+    // channelReader := ZmqChannelReader{channeler : nil}
+    channelReader := BlockSubscriber{channeler : nil}
     processor := BitcoinBlockProcessor{}
-    if channelReader.subscribe(cfg.ZmqEndpointRawBlock, "rawblock") == false {
+
+    if channelReader.Subscribe(cfg.ZmqEndpointRawBlock, "rawblock") == false {
         return
     }
 
-    defer channelReader.clear()
+    defer channelReader.Reset()
 
-    // Listen for messages
-    channelReader.listen(processor, cfg.ProtocolId)
-}
-
-type ChannelReader interface
-{
-    subscribe(endpoint string, typ string) bool
-    clear() bool
-    listen(processor RawBlockProcessor)
-    validate() bool
-}
-
-type ZmqChannelReader struct
-{
-    channeler* goczmq.Channeler
-}
-
-func (zmqC *ZmqChannelReader) clear() {
-    zmqC.channeler.Destroy()
-}
-
-func (zmqC *ZmqChannelReader) subscribe(endpoint string, typ string) bool {
-    zmqC.channeler = goczmq.NewSubChanneler(endpoint, typ)
-    if zmqC.channeler == nil {
-        log.Fatal("Error creating channeler", zmqC.channeler)
-        return false
-    }
-    fmt.Println("Subscribed to: ", endpoint, typ)
-    return true
-}
-
-func (zmqC *ZmqChannelReader) validate() (bool, [][]byte) {
-    msg, ok := <-zmqC.channeler.RecvChan
-    // Validate
-    if !ok {
-        log.Println("Failed to receive message")
-        return false, nil
-    }
-    if len(msg) != 3 {
-        log.Println("Received message with unexpected number of parts")
-        return false, nil
-    }
-    return true, msg
-}
-
-func (zmqC *ZmqChannelReader) listen(processor RawBlockProcessor, protocolId string) {
-    fmt.Println("Listening for Raw Blocks (reader) from ZMQ channel...", zmqC.channeler)
-    for {
-        ok, msg := zmqC.validate()
-        if !ok {
-            continue
-        }
+    fn := func(msg [][]byte) bool {
         log.Println("Processing message")
-        // process message
-        processor.process(msg, protocolId)
+        return processor.process(msg, cfg.ProtocolId)
+    }
+    // Listen for messages
+    fmt.Println("Listening for Raw Blocks (reader) from ZMQ channel...", cfg.ZmqEndpointRawBlock)
+    for {
+            msg, ok := <-channelReader.channeler.RecvChan
+            if !channelReader.Validate(ok, msg) {
+                continue
+            }
+            channelReader.Process(fn, msg)
     }
 }
 
 type RawBlockProcessor interface
 {
-     // validate() bool
-     process(data [][]byte, protocolId string) bool
-     // printBlock()
-     // printTransaction()
+    // validate() bool
+    process(data [][]byte, protocolId string) bool
+    // printBlock()
+    // printTransaction()
 }
 
 type BitcoinBlockProcessor struct
@@ -100,14 +58,14 @@ func (btcProc BitcoinBlockProcessor) process(msg [][]byte, protocolId string) bo
 
     // Print out the parts
     fmt.Printf("Topic: %s\n", topic)
-	fmt.Printf("Serialized block: %x\n", serializedBlock)
+    fmt.Printf("Serialized block: %x\n", serializedBlock)
     // fmt.Printf("Serialized Transaction: %x\n", serializedBlock) // Print as hex
     parsedBlock, err := parseBlock(serializedBlock)
     if err != nil {
         log.Printf("Failed to parse transaction: %v", err)
         return false
     }
-	printBlock(parsedBlock)
+    printBlock(parsedBlock)
     readPostedData(parsedBlock, []byte(protocolId))
     return true
 }
@@ -125,11 +83,12 @@ func parseBlock(data []byte) (*wire.MsgBlock, error) {
 func readPostedData(block *wire.MsgBlock, protocolId []byte) {
     var blobs [][]byte
     for _, tx := range block.Transactions {
-		for _, txout := range tx.TxOut {
+        for _, txout := range tx.TxOut {
             pushData, err := utils.ExtractPushData(1, txout.PkScript)
             if err != nil {
                 log.Println("failed to extract push data", err)
             }
+            log.Println("Data: ", pushData)
             if pushData != nil && bytes.HasPrefix(pushData, protocolId) {
                 blobs = append(blobs, pushData[:])
             }
@@ -137,7 +96,7 @@ func readPostedData(block *wire.MsgBlock, protocolId []byte) {
     }
     var data []string
     for _, blob := range blobs {
-		data = append(data, fmt.Sprintf("%s:%x", blob[:len(protocolId)], blob[len(protocolId):]))
+        data = append(data, fmt.Sprintf("%s:%x", blob[:len(protocolId)], blob[len(protocolId):]))
     }
 
     log.Println("Relayer Read: ", data)

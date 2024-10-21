@@ -14,6 +14,7 @@ type Config struct {
 
 	ZmqEndpointRawBlock  string `yaml:"zmq-endpoint-raw-block"`
 	ZmqEndpointHashBlock string `yaml:"zmq-endpoint-hash-block"`
+	ZmqEndpointDataBlock string `yaml:"zmq-endpoint-data-block"`
 
 	BtcCliPath string `yaml:"bitcoin-cli-path"`
 	BashScriptPath string `yaml:"bash-script-path"`

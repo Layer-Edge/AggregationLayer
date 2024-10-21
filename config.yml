@@ -2,8 +2,9 @@
 
 protocol-id: "lEdge" 
 
-zmq-endpoint-raw-block: "tcp://0.0.0.0:28332" 
-zmq-endpoint-hash-block: "tcp://0.0.0.0:28334"
+zmq-endpoint-raw-block: "tcp://0.0.0.0:29000"
+zmq-endpoint-data-block: "tcp://0.0.0.0:29000"
+zmq-endpoint-hash-block: "tcp://0.0.0.0:29000"
 
 # Writer Only  -----
 enable-writer: false # run writer service
