@@ -3,8 +3,8 @@
 protocol-id: "lEdge" 
 
 zmq-endpoint-raw-block: "tcp://0.0.0.0:29000"
-zmq-endpoint-data-block: "tcp://0.0.0.0:29000"
 zmq-endpoint-hash-block: "tcp://0.0.0.0:29000"
+zmq-endpoint-data-block: "tcp://0.0.0.0:40000"
 
 # Writer Only  -----
 enable-writer: false # run writer service
@@ -26,3 +26,8 @@ relayer:
 
 bitcoin-cli-path: "/home/rishabh/bitcoin-cli/bitcoin-27.0/bin/bitcoin-cli"
 bash-script-path: "/home/rishabh/bitcoin-da-main/scripts/"
+
+cosmos:
+  chainId: "dd88c532eea9baed321677054cbc51582167a174"
+  rpcEndpoint: "http://34.31.74.109:26657/"
+  accountPrefix: "layeredge"

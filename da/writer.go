@@ -5,7 +5,7 @@ import (
     "encoding/hex"
     "fmt"
     "github.com/ethereum/go-ethereum/ethclient"
-    "github.com/cosmos/cosmos-sdk/crypto/keyring"
+    // "github.com/cosmos/cosmos-sdk/crypto/keyring"
     "log"
     "os"
     "os/exec"
@@ -62,20 +62,20 @@ func HashBlockSubscriber(cfg *config.Config) {
         return
     }
 
-    coscfg := CosmosClientConfig{
-        ChainID:        config.GetConfig().Cosmos.ChainID,
-        RPCEndpoint:    config.GetConfig().Cosmos.RpcEndpoint,
-        AccountPrefix:  config.GetConfig().Cosmos.AccountPrefix,
-        KeyringBackend: keyring.BackendTest,
-        KeyName:        "mykey", // Replace with actual key name
-        HomeDir:        "",      // Replace with actual home directory
-    }
+    //coscfg := CosmosClientConfig{
+    //    ChainID:        config.GetConfig().Cosmos.ChainID,
+    //    RPCEndpoint:    config.GetConfig().Cosmos.RpcEndpoint,
+    //    AccountPrefix:  config.GetConfig().Cosmos.AccountPrefix,
+    //    KeyringBackend: keyring.BackendTest,
+    //    KeyName:        "layeredge", // Replace with actual key name
+    //    HomeDir:        "~/repo/bitcoin-da",      // Replace with actual home directory
+    //}
 
     client := &CosmosClient{}
-    err := client.Init(coscfg)
-    if err != nil {
-        log.Fatalf("Failed to initialize Cosmos client: %v", err)
-    }
+    // err := client.Init(coscfg)
+    // if err != nil {
+    //     log.Fatalf("Failed to initialize Cosmos client: %v", err)
+    // }
 
     BashScriptPath = cfg.BashScriptPath
     BtcCliPath = cfg.BtcCliPath
@@ -93,7 +93,7 @@ func HashBlockSubscriber(cfg *config.Config) {
     prf := ZKProof{}
 
     fnAgg := func(msg [][]byte) bool {
-        log.Println("Aggregating message: ", msg[0])
+        log.Println("Aggregating message: ", string(msg[0]), string(msg[1]))
         aggr.Aggregate(msg[1])
         return true
     }
@@ -114,7 +114,7 @@ func HashBlockSubscriber(cfg *config.Config) {
     }
 
     fnWrite := func(msg []byte) {
-        err = client.SendData(string(aggr.data[:]))
+        err = client.Send(string(aggr.data[:]), config.GetConfig().Cosmos.RpcEndpoint)
         if err != nil {
             log.Fatalf("Failed to send data: %v", err)
             return
@@ -140,7 +140,7 @@ func HashBlockSubscriber(cfg *config.Config) {
             counter++
             dataReader.Process(fnAgg, msg)
             // Write to Bitcoin
-            if (counter % cfg.WriteIntervalBlock) != 0 {
+            if (counter % cfg.WriteIntervalBlock) == 0 {
                 fnWrite(aggr.data)
             }
         case msg, ok := <-btcReader.channeler.RecvChan:

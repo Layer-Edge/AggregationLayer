@@ -3,7 +3,8 @@ package da
 import (
     "context"
     "fmt"
-
+    "log"
+    "os/exec"
     "cosmossdk.io/math"
     "github.com/cosmos/cosmos-sdk/client"
     "github.com/cosmos/cosmos-sdk/client/tx"
@@ -47,8 +48,8 @@ func (c *CosmosClient) Init(cfg CosmosClientConfig) error {
     marshaler := codec.NewProtoCodec(interfaceRegistry)
 
     kr, err := keyring.New(
-        "myapp",
-        cfg.KeyringBackend,
+        "layeredge.info",
+        "test",
         cfg.HomeDir,
         nil,
         marshaler,
@@ -128,3 +129,9 @@ func (c *CosmosClient) getAccountNumberAndSequence() (uint64, uint64, error) {
     return accNum, seq, nil
 }
 
+func (c *CosmosClient) Send(data string, addr string) error {
+    cmd := exec.Command(BashScriptPath+"/run-cosmos-tx.sh", "-m",  data, "-r", addr)
+    out, err := cmd.Output()
+    fmt.Printf("Sending Data: %s\n", out)
+    return err
+}
