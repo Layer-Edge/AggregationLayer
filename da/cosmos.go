@@ -3,7 +3,6 @@ package da
 import (
     "context"
     "fmt"
-    "log"
     "os/exec"
     "cosmossdk.io/math"
     "github.com/cosmos/cosmos-sdk/client"

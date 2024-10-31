@@ -10,18 +10,22 @@ import (
 type Lambda func([][]byte) bool
 
 type BlockSubscriber struct {
-    // Subscribe(endpoint string, filter string) bool
-    // Reset()
-    // GetMessage() (bool, [][]byte)
-    // Process(fn Lambda) (bool, [][]byte)
-
     channeler* goczmq.Channeler
 }
 
 func (subr *BlockSubscriber) Subscribe(endpoint string, filter string) bool {
     subr.channeler = goczmq.NewSubChanneler(endpoint, filter)
     if subr.channeler == nil {
-        log.Fatal("Error creating channeler: ", endpoint, filter)
+        log.Fatal("Error creating subscribe channeler: ", endpoint, filter)
+        return false;
+    }
+    return true
+}
+
+func (subr *BlockSubscriber) Replier(endpoint string) bool {
+    subr.channeler = goczmq.NewRepChanneler(endpoint)
+    if subr.channeler == nil {
+        log.Fatal("Error creating reply ehanneler: ", endpoint)
         return false;
     }
     return true

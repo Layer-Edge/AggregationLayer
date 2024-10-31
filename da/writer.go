@@ -29,21 +29,14 @@ func CallScriptWithData(data string) ([]byte, error) {
 }
 
 func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client) ([]byte, error) {
-    // // Split the message into topic, serialized transaction, and sequence number
-    // topic := string(msg[0])
-
-    // // Print out the parts
-    // fmt.Printf("Topic: %s\n", topic)
-
     layerEdgeHeader, err := layerEdgeClient.HeaderByNumber(context.Background(), nil)
-    // if err != nil {
-    //     log.Println("Error getting layerEdgeHeader: ", err)
-    //     return nil, err
-    // }
+    if err != nil {
+        log.Println("Error getting layerEdgeHeader: ", err)
+        return nil, err
+    }
     dhash := layerEdgeHeader.Hash()
     log.Println("Latest LayerEdge Block Hash:", dhash.Hex())
 
-    // data := append([]byte(protocolId), dhash.Bytes()...)
     data := append([]byte(protocolId), msg...)
     hash, err := CallScriptWithData(hex.EncodeToString(data))
     return hash, err
@@ -51,31 +44,17 @@ func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client
 
 func HashBlockSubscriber(cfg *config.Config) {
     // Init varaibles
-    // processor := BitcoinBlockProcessor{}
     btcReader := BlockSubscriber{channeler : nil}
     if btcReader.Subscribe(cfg.ZmqEndpointHashBlock, "hashblock") == false {
         return
     }
 
     dataReader := BlockSubscriber{channeler : nil}
-    if dataReader.Subscribe(cfg.ZmqEndpointDataBlock, "datablock") == false {
+    if dataReader.Replier(cfg.ZmqEndpointDataBlock) == false {
         return
     }
 
-    //coscfg := CosmosClientConfig{
-    //    ChainID:        config.GetConfig().Cosmos.ChainID,
-    //    RPCEndpoint:    config.GetConfig().Cosmos.RpcEndpoint,
-    //    AccountPrefix:  config.GetConfig().Cosmos.AccountPrefix,
-    //    KeyringBackend: keyring.BackendTest,
-    //    KeyName:        "layeredge", // Replace with actual key name
-    //    HomeDir:        "~/repo/bitcoin-da",      // Replace with actual home directory
-    //}
-
     client := &CosmosClient{}
-    // err := client.Init(coscfg)
-    // if err != nil {
-    //     log.Fatalf("Failed to initialize Cosmos client: %v", err)
-    // }
 
     BashScriptPath = cfg.BashScriptPath
     BtcCliPath = cfg.BtcCliPath
@@ -99,10 +78,10 @@ func HashBlockSubscriber(cfg *config.Config) {
     }
 
     fnBtc := func(msg [][]byte) bool {
-        // if len(msg) != 3 {
-        //     log.Println("Received message with unexpected number of parts")
-        //     return false
-        // }
+        if len(msg) != 3 {
+            log.Println("Received message with unexpected number of parts")
+            return false
+        }
         // Process
         hash, err := ProcessMsg(msg[1], cfg.ProtocolId, layerEdgeClient)
         if err != nil {
@@ -137,6 +116,7 @@ func HashBlockSubscriber(cfg *config.Config) {
             if !dataReader.Validate(ok, msg) {
                 continue
             }
+            dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}
             counter++
             dataReader.Process(fnAgg, msg)
             // Write to Bitcoin
