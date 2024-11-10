@@ -33,6 +33,12 @@ type Config struct {
 		RpcEndpoint   string `yaml:"rpcEndpoint"`
 		AccountPrefix string `yaml:"accountPrefix"`
 	} `yaml:"cosmos"`
+
+	Mongo struct {
+		Endpoint       string `yaml:"endpoint"`
+		DB   string `yaml:"db"`
+		Collection string `yaml:"collection"`
+	} `yaml:"mongo"`
 	// PrivateKey struct {
 	// 	// internal key pair is used for tweaking
 	// 	Internal string `yaml:"internal"`

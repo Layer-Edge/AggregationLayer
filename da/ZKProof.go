@@ -13,7 +13,6 @@ func (prf *ZKProof) GenerateProof(msg []byte) []byte {
 }
 
 // MD5 sum for now
-func (prf *ZKProof) GenerateAggregatedProof(msg []byte) []byte {
-    h := md5.New()
-    return h.Sum(msg)
+func (prf *ZKProof) GenerateAggregatedProof(msg []byte) [16]byte {
+    return md5.Sum(msg)
 }

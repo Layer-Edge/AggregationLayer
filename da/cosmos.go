@@ -128,9 +128,9 @@ func (c *CosmosClient) getAccountNumberAndSequence() (uint64, uint64, error) {
     return accNum, seq, nil
 }
 
-func (c *CosmosClient) Send(data string, addr string) error {
+func (c *CosmosClient) Send(data string, addr string) ([]byte, error) {
     cmd := exec.Command(BashScriptPath+"/run-cosmos-tx.sh", "-m",  data, "-r", addr)
     out, err := cmd.Output()
     fmt.Printf("Sending Data: %s\n", out)
-    return err
+    return out, err
 }

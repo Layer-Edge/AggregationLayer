@@ -10,13 +10,14 @@ num_inputs=1
 ### Validate data length
 if [[ ${#op_return_data} -gt 80 ]]
 then
-	exit
+	echo "Size check of data failed; ${#op_return_data} > 80" >> op_return_script.out
+	exit 1
 fi
 
 exit_if_fail() {
 	if [[ $? -ne 0 ]]
 	then
-		>&2 echo "error" $1 $?
+		echo "error" $1 $? >> op_return_script.out
 		exit 1
 	fi
 }
