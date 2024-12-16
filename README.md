@@ -33,7 +33,7 @@ Services:
 
 ### [Writer](./docs/writer-service.md)
 
-`go build && ./bitcoin-da -w` or `go run . -w`
+`go build && ./bitcoin-da -w` or `go run . -w` or `make build`
 
 In the writer service, we listen to state proofs posted by the LayerEdge chain and write the latest proof onto the bitcoin chain every 1 hour. For this we perform the following tasks:
 * Open a relayer connection to a bitcoin node service
@@ -63,7 +63,7 @@ commit output.
 
 ### [Reader](./docs/reader-service.md)
 
-`go build && ./bitcoin-da`  or  `go run .`
+`go build && ./bitcoin-da`  or  `go run .` or `make run`
 
 In the Reader service, we provide a way to listen to inscriptions being posted onto the bitcoin chain. We do this by listening to all transactions and go through each one looking for an inscription that matches the "PROTOCOL_ID" that posted it. These are the following steps we take to get this done
 * Open a websocket connection to a bitcoin node

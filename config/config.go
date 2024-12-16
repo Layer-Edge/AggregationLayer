@@ -16,7 +16,7 @@ type Config struct {
 	ZmqEndpointHashBlock string `yaml:"zmq-endpoint-hash-block"`
 	ZmqEndpointDataBlock string `yaml:"zmq-endpoint-data-block"`
 
-	BtcCliPath string `yaml:"bitcoin-cli-path"`
+	BtcCliPath     string `yaml:"bitcoin-cli-path"`
 	BashScriptPath string `yaml:"bash-script-path"`
 
 	EnableWriter bool `yaml:"enable-writer"`
@@ -35,8 +35,8 @@ type Config struct {
 	} `yaml:"cosmos"`
 
 	Mongo struct {
-		Endpoint       string `yaml:"endpoint"`
-		DB   string `yaml:"db"`
+		Endpoint   string `yaml:"endpoint"`
+		DB         string `yaml:"db"`
 		Collection string `yaml:"collection"`
 	} `yaml:"mongo"`
 	// PrivateKey struct {
@@ -124,11 +124,11 @@ func readFile(cfg *Config) {
 // 	if err != nil {
 // 		log.Fatal("Error loading .env file")
 // 	}
-// 
+//
 // 	cfg.PrivateKey.Internal = os.Getenv("PRIVATE_KEY_INTERNAL")
 // 	cfg.PrivateKey.Signer = os.Getenv("PRIVATE_KEY_SIGNER")
 // 	log.Println(cfg.PrivateKey.Internal, cfg.PrivateKey.Signer)
-// 
+//
 // 	if err != nil {
 // 		log.Fatal(err)
 // 	}

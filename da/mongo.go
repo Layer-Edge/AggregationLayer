@@ -4,30 +4,37 @@ import (
 	// "encoding/hex"
 	"context"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/Layer-Edge/bitcoin-da/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// type MongoSender struct {
+// 	collection *mongo.Collection
+// }
+
 type MongoSender struct {
+	client     *mongo.Client
 	collection *mongo.Collection
 }
 
-func (mongoc *MongoSender) Init(cfg *config.Config) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://vishal:m8C6EhD6ErntgDBu@cluster0.xoean.mongodb.net/")) // "mongodb://foo:bar@localhost:27017"))
+func NewMongoSender(uri, dbName, collectionName string) (*MongoSender, error) {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to connect to MongoDB: %v", err)
 	}
-	mongoc.collection = client.Database(cfg.Mongo.DB).Collection(cfg.Mongo.Collection)
-	return nil
-}
 
+	// Select database and collection
+	db := client.Database(dbName)
+	collection := db.Collection(collectionName)
+
+	return &MongoSender{
+		client:     client,
+		collection: collection,
+	}, nil
+}
 func BytesToJson(data []byte) (bson.M, error) {
 	var bdoc bson.M
 	err := bson.Unmarshal(data, &bdoc)
@@ -36,17 +43,29 @@ func BytesToJson(data []byte) (bson.M, error) {
 	}
 	return bdoc, nil
 }
-
 func (mongoc *MongoSender) SendData(data []byte) error {
-	doc, err := BytesToJson(data)
-	if err != nil {
-		return err
+	// Check if collection is initialized
+	if mongoc.collection == nil {
+		return fmt.Errorf("MongoDB collection not initialized")
 	}
-	res, err := mongoc.collection.InsertOne(context.TODO(), &doc)
-	if err != nil {
-		log.Panic(err)
-		return err
+
+	// Parse the JSON data into a map
+	var doc map[string]interface{}
+	if err := bson.UnmarshalExtJSON(data, true, &doc); err != nil {
+		return fmt.Errorf("failed to parse JSON: %v", err)
 	}
+
+	// Add timestamp field
+	doc["timestamp"] = time.Now().UTC() // Adds current UTC time
+	// Alternative: Use ISODate format that MongoDB prefers
+	// doc["timestamp"] = primitive.NewDateTimeFromTime(time.Now().UTC())
+
+	// Insert the document
+	res, err := mongoc.collection.InsertOne(context.TODO(), doc)
+	if err != nil {
+		return fmt.Errorf("failed to insert document: %v", err)
+	}
+
 	fmt.Printf("inserted document with ID %v\n", res.InsertedID)
 	return nil
 }

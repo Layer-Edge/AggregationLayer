@@ -1,0 +1,12 @@
+{
+  "name": "cosmos-tx-script",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@cosmjs/stargate": "0.29.5",
+    "@cosmjs/proto-signing": "0.29.5",
+    "@cosmjs/tendermint-rpc": "0.29.5",
+    "@cosmjs/encoding": "0.29.5",
+    "dotenv": "16.0.3"
+  }
+}
