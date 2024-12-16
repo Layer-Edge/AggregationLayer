@@ -1,86 +1,3 @@
-#!/bin/bash
-
-# Configuration
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-LOG_DIR="${SCRIPT_DIR}/logs"
-LOG_FILE="${LOG_DIR}/transactions.log"
-
-# Default values
-RECIPIENT=""
-MEMO=""
-
-# Create logs directory if it doesn't exist
-mkdir -p "$LOG_DIR"
-
-# Logging function
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
-}
-
-# Usage information function
-print_usage() {
-    echo "Usage: $0 -r <recipient_address> -m <memo>"
-    echo "  -r : Recipient address (required)"
-    echo "  -m : Memo (required)"
-    echo "Example: $0 -r cosmos1abc... -m \"test transfer\""
-    exit 1
-}
-
-# Parse command line arguments
-while getopts "r:m:" opt; do
-    case $opt in
-        r)
-            RECIPIENT="$OPTARG"
-	    echo "ADDR: $RECIPIENT"
-            ;;
-        m)
-            MEMO="$OPTARG"
-	    echo "Data: $MEMO"
-            ;;
-        ?)
-            print_usage
-            ;;
-    esac
-done
-
-# Validate required parameters
-if [ -z "$RECIPIENT" ] || [ -z "$MEMO" ]; then
-    log "Error: Both recipient (-r) and memo (-m) are required"
-    print_usage
-fi
-
-# Check for Node.js installation
-if ! command -v node &> /dev/null; then
-    log "Installing Node.js..."
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-fi
-
-# Create package.json if it doesn't exist
-if [ ! -f "package.json" ]; then
-    log "Creating package.json..."
-    cat > "package.json" << EOL
-{
-  "name": "cosmos-tx-script",
-  "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "@cosmjs/stargate": "0.29.5",
-    "@cosmjs/proto-signing": "0.29.5",
-    "@cosmjs/tendermint-rpc": "0.29.5",
-    "@cosmjs/encoding": "0.29.5",
-    "dotenv": "16.0.3"
-  }
-}
-EOL
-
-    log "Installing dependencies..."
-    npm install
-fi
-
-# Create/update index.js
-log "Updating index.js..."
-cat > "index.js" << 'EOL'
 import pkg from '@cosmjs/stargate';
 import protoPkg from '@cosmjs/proto-signing';
 import { Tendermint34Client } from '@cosmjs/tendermint-rpc';
@@ -95,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 dotenv.config();
 
-// Get command line arguments
+// Get recipient and memo from command line arguments
 const recipient = process.argv[2];
 const memo = process.argv[3];
 
@@ -113,7 +30,7 @@ const main = async () => {
         const [firstAccount] = await wallet.getAccounts();
         console.log("Account Address:", firstAccount.address);
 
-        // Initialize client and check balance
+        // Initialize client
         const client = await StargateClient.connect(rpcEndpoint);
         const balance = await client.getAllBalances(firstAccount.address);
         console.log("Account balance:", balance);
@@ -161,7 +78,7 @@ const main = async () => {
             console.log("\nTransaction sent successfully!");
             console.log("Transaction hash:", result.transactionHash);
 
-            // Confirm transaction
+            // Basic transaction confirmation
             const txResult = await client.getTx(result.transactionHash);
             if (txResult) {
                 console.log("\nTransaction confirmed!");
@@ -173,7 +90,6 @@ const main = async () => {
             console.error("\nTransaction failed!");
             console.error("Error details:", sendError.message);
             
-            // Provide helpful error messages
             if (sendError.message.includes("insufficient funds")) {
                 console.log("\nPossible solution: Make sure you have enough tokens to cover both the transfer amount and gas fees.");
             }
@@ -197,16 +113,3 @@ main().catch(error => {
     console.error("Fatal error:", error);
     process.exit(1);
 });
-EOL
-
-# Create .env file if it doesn't exist
-if [ ! -f ".env" ]; then
-    log "Creating .env file..."
-    echo "MNEMONIC=your_mnemonic_here" > .env
-    chmod 600 .env
-    log "Please update the .env file with your mnemonic"
-fi
-
-# Execute transaction
-log "Executing transaction script... : recipient: \"$RECIPIENT\", memo: \"$MEMO\""
-node index.js "$RECIPIENT" "$MEMO"

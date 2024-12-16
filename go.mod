@@ -12,6 +12,7 @@ require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/cosmos/cosmos-sdk v0.50.9
 	github.com/ethereum/go-ethereum v1.14.2
+	go.mongodb.org/mongo-driver v1.17.1
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/zeromq/goczmq.v4 v4.1.0
 )
@@ -165,7 +166,6 @@ require (
 	github.com/zondax/hid v0.9.2 // indirect
 	github.com/zondax/ledger-go v0.14.3 // indirect
 	go.etcd.io/bbolt v1.3.10 // indirect
-	go.mongodb.org/mongo-driver v1.17.1 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240404231335-c0f41cb1a7a0 // indirect

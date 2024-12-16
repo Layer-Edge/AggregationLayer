@@ -1,19 +1,23 @@
 # Reader and Writer
-
 protocol-id: "lEdge" 
 
 zmq-endpoint-raw-block: "tcp://0.0.0.0:29000"
 zmq-endpoint-hash-block: "tcp://0.0.0.0:29000"
-zmq-endpoint-data-block: "tcp://0.0.0.0:40000"
+zmq-endpoint-data-block: "tcp://0.0.0.0:40006"
 
 # Writer Only  -----
-enable-writer: false # run writer service
+enable-writer: true # run writer service
 
-write-interval-blocks: 1 # Configure write op. frequency
+write-interval-blocks: 10 # Configure write op. frequency
 
 layer-edge-rpc:
   http: "https://testnet-rpc.layeredge.io/" 
   wss: "wss://testnet-rpc.layeredge.io/"
+
+mongo:
+  endpoint: "mongodb+srv://admin:admin@localhost:27017/"
+  db: "devnet"
+  collection: "test"
 
 private-key:
   internal: "get-from-env" # PRIVATE_KEY_INTERNAL
@@ -24,10 +28,11 @@ relayer:
   user: "rishabh"
   pass: "LT8qjx7hkw4pPYosLEI40qAMuEICD4-TGnG6mPMnMIw" 
 
-bitcoin-cli-path: "/home/ubuntu/bitcoin-setup/bitcoin-27.0/bin/bitcoin-cli"
-bash-script-path: "/home/ubuntu/repo/bitcoin-da/scripts/"
+bitcoin-cli-path: "/usr/bin/bitcoin-cli"
+bash-script-path: "/home/ubuntu/repo/bitcoin-da/scripts"
 
 cosmos:
   chainId: "dd88c532eea9baed321677054cbc51582167a174"
   rpcEndpoint: "http://34.31.74.109:26657/"
   accountPrefix: "layeredge"
+

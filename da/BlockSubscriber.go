@@ -14,6 +14,7 @@ type BlockSubscriber struct {
 }
 
 func (subr *BlockSubscriber) Subscribe(endpoint string, filter string) bool {
+    log.Println("Subscibe:", endpoint, filter)
     subr.channeler = goczmq.NewSubChanneler(endpoint, filter)
     if subr.channeler == nil {
         log.Fatal("Error creating subscribe channeler: ", endpoint, filter)
@@ -23,6 +24,7 @@ func (subr *BlockSubscriber) Subscribe(endpoint string, filter string) bool {
 }
 
 func (subr *BlockSubscriber) Replier(endpoint string) bool {
+    log.Println("Replier:", endpoint)
     subr.channeler = goczmq.NewRepChanneler(endpoint)
     if subr.channeler == nil {
         log.Fatal("Error creating reply ehanneler: ", endpoint)
