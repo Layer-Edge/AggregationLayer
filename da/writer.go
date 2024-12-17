@@ -104,7 +104,8 @@ func HashBlockSubscriber(cfg *config.Config) {
 
 	fnBtc := func(msg [][]byte) ([]byte, error) {
 		// Process
-		return ProcessMsg(msg[1], cfg.ProtocolId, layerEdgeClient)
+		hash, err := ProcessMsg(msg[1], cfg.ProtocolId, layerEdgeClient)
+		return hash, err
 	}
 
 	fnWrite := func(msg []byte) {
@@ -170,12 +171,13 @@ func HashBlockSubscriber(cfg *config.Config) {
 		dat["proofs"] = lst
 		lst = make([]map[string]string, 0)
 
-		hash, err := fnBtc([][]byte{nil, prf[:]})
+		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, prf[:]})
 
 		if err != nil {
 			log.Println("Error writing -> ", err, "; out:", string(hash))
 			return
 		}
+		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
 		dat["btc_tx_hash"] = strings.ReplaceAll(string(hash[:]), "\n", "")
 		out, err = json.Marshal(dat)
 		log.Print("Sending proof info to mongo:", string(out))
