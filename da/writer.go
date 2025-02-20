@@ -25,7 +25,17 @@ import (
 var (
 	BtcCliPath     = ""
 	BashScriptPath = ""
+	Risc0Path      = ""
 )
+
+func CallZKScriptWithData(data string) ([]byte, error) {
+	cmd := exec.Command(BashScriptPath+"/run_merkle_tree.sh", data)
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, "RISC0_PATH="+Risc0Path)
+	log.Println("Running Merkle-tree script", cmd)
+	out, err := cmd.Output()
+	return out, err
+}
 
 func CallScriptWithData(data string) ([]byte, error) {
 	cmd := exec.Command(BashScriptPath+"/op_return_transaction.sh", data)
@@ -80,6 +90,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 
 	BashScriptPath = cfg.BashScriptPath
 	BtcCliPath = cfg.BtcCliPath
+	Risc0Path = cfg.Risc0Path
 
 	defer btcReader.Reset()
 	defer dataReader.Reset()
@@ -90,7 +101,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 	}
 
 	counter := 0
-	aggr := Aggregator{data: nil}
+	aggr := Aggregator{data:""}
 	prf := ZKProof{}
 	lst := make([]map[string]string, 0)
 
@@ -108,16 +119,16 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return hash, err
 	}
 
-	fnWrite := func(msg []byte) {
+	fnWrite := func() {
 		// Generate and process proof
-		prf := prf.GenerateAggregatedProof(aggr.data)
+		merkel_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
-		log.Println("Aggregated Proof: ", prf)
-		aggr.data = nil
+		log.Println("Aggregated Proof: ", merkel_root)
+		aggr.data = ""
 
 		payload := map[string]string{
 			"recipient": "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d",
-			"memo":      string(prf[:]),
+			"memo":      string(merkel_root[:]),
 		}
 
 		// Convert payload to JSON
@@ -161,8 +172,9 @@ func HashBlockSubscriber(cfg *config.Config) {
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
 			log.Print("Cosmos API returned non-OK status: %d", resp.StatusCode)
-			// return
+			return
 		}
+		log.Print("Successfully sent data: %v", resp)
 		// fmt.Print(out)
 		var dat map[string]interface{}
 		if err := json.Unmarshal(out, &dat); err != nil {
@@ -171,7 +183,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		dat["proofs"] = lst
 		lst = make([]map[string]string, 0)
 
-		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, prf[:]})
+		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
 
 		if err != nil {
 			log.Println("Error writing -> ", err, "; out:", string(hash))
@@ -206,7 +218,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			dataReader.Process(fnAgg, msg)
 			// Write to Bitcoin
 			if (counter % cfg.WriteIntervalBlock) == 0 {
-				fnWrite(aggr.data)
+				fnWrite()
 			}
 		case msg, ok := <-btcReader.channeler.RecvChan:
 			log.Println("Received btc block")
@@ -214,7 +226,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 				continue
 			}
 			// Write to Bitcoin
-			fnWrite(aggr.data)
+			fnWrite()
 		}
 	}
 }

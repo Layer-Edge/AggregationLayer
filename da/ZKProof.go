@@ -1,7 +1,13 @@
 package da
 
 import (
-    "crypto/md5"
+    // "bytes"
+    // "crypto/md5"
+    // "encoding/binary"
+    // "encoding/hex"
+    "fmt"
+    // "os/exec"
+    // "strings"
 )
 
 type ZKProof struct {
@@ -13,6 +19,17 @@ func (prf *ZKProof) GenerateProof(msg []byte) []byte {
 }
 
 // MD5 sum for now
-func (prf *ZKProof) GenerateAggregatedProof(msg []byte) [16]byte {
-    return md5.Sum(msg)
+func (prf *ZKProof) GenerateAggregatedProof(msg string) string {
+    /* struct {
+        byte[2] length
+        data
+    }
+        */
+        merkleRoot, err := GetMerkleRoot(msg)
+        if err != nil {
+            fmt.Printf("Error generating Merkle root: %v\n", err)
+            return ""
+        }
+        return merkleRoot
 }
+
