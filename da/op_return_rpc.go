@@ -1,33 +1,32 @@
 package da
 
 import (
-	"net/http"
-	"io/ioutil"
-	"encoding/json"
 	"bytes"
-    "log"
-    "time"
+	"encoding/json"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"time"
 )
 
 var (
-BTCEndpoint = ""
-User = "" 
-Auth = ""
+	BTCEndpoint = ""
+	Auth        = ""
 )
 
 type response struct {
-	Result json.RawMessage       `json:"result"`
+	Result json.RawMessage `json:"result"`
 	Error  *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
-	ID     string `json:"id"`
+	ID string `json:"id"`
 }
 
 type utxo struct {
-		Txid string `json:"txid"`
-		Vout int `json:"vout"`
-		Amount float64 `json:"amount"`	
+	Txid   string  `json:"txid"`
+	Vout   int     `json:"vout"`
+	Amount float64 `json:"amount"`
 }
 
 type signedtx struct {
@@ -44,8 +43,7 @@ func Make_RPC_Call(url string, args []byte) string {
 		return ""
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("user", User)
-	req.Header.Set("Authorization", "Basic " + Auth)
+	req.Header.Set("Authorization", "Basic "+Auth)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatalf("Failed to send data to BTC: %v", err)
@@ -66,18 +64,18 @@ func Make_RPC_Call(url string, args []byte) string {
 }
 
 func ListUnspent() string {
-	payload := map[string]interface{} {
+	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
-		"id": "wallet_txn",
-		"method": "listunspent",
-		"params": []interface{} {
-			 1,
-			 9999999,
-			 []interface{}{},
-			 true,
-			 map[string]int{ 
+		"id":      "wallet_txn",
+		"method":  "listunspent",
+		"params": []interface{}{
+			1,
+			9999999,
+			[]interface{}{},
+			true,
+			map[string]int{
 				"maximumCount": 10,
-			 },
+			},
 		},
 	}
 	jsonPayload, err := json.Marshal(payload)
@@ -90,11 +88,11 @@ func ListUnspent() string {
 }
 
 func GetRawAddress() string {
-	payload := map[string]interface{} {
+	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
-		"id": "wallet_address",
-		"method": "getrawchangeaddress",
-		"params": []interface {}{},
+		"id":      "wallet_address",
+		"method":  "getrawchangeaddress",
+		"params":  []interface{}{},
 	}
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
@@ -103,7 +101,7 @@ func GetRawAddress() string {
 }
 
 func CalculateRequired(numInputs int, dataSize int) float64 {
-	return float64(53 + numInputs*68 + dataSize) * float64(0.00000001)
+	return float64(53+numInputs*68+dataSize) * float64(0.00000001)
 }
 
 func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64) {
@@ -129,7 +127,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 		if err != nil {
 			log.Printf("Failed to unmarshal response: %v", err)
 			return inputs, 0.0
-		}else {
+		} else {
 			log.Printf("UTXO : %s", u)
 		}
 
@@ -163,7 +161,7 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 		log.Printf("No inputs provided for transaction")
 		return ""
 	}
-	
+
 	if address == "" {
 		log.Printf("Empty address provided")
 		return ""
@@ -171,15 +169,15 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 
 	log.Printf("Creating raw transaction with %d inputs, change address %s, change amount %f", len(inputs), address, change)
 
-	payload := map[string]interface{} {
+	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
-		"id": "op_cat_decode",
-		"method": "createrawtransaction",
+		"id":      "op_cat_decode",
+		"method":  "createrawtransaction",
 		"params": []interface{}{
 			inputs,
 			map[string]interface{}{
-				"data": data, 
-				address:change,
+				"data":  data,
+				address: change,
 			},
 		},
 	}
@@ -196,11 +194,11 @@ func DecodeRawTransaction(rawtransaction string) {
 		log.Printf("Empty raw transaction provided")
 	}
 
-	payload := map[string]interface{} {
+	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
-		"id": "op_cat_decode",
-		"method": "decoderawtransaction",
-		"params": []string { 
+		"id":      "op_cat_decode",
+		"method":  "decoderawtransaction",
+		"params": []string{
 			rawtransaction,
 		},
 	}
@@ -220,11 +218,11 @@ func SignRawTransaction(rawtransaction string) string {
 
 	log.Printf("Signing raw transaction")
 
-	payload := map[string]interface{} {
+	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
-		"id": "op_cat_sign_tx",
-		"method": "signrawtransactionwithwallet",
-		"params": []string { 
+		"id":      "op_cat_sign_tx",
+		"method":  "signrawtransactionwithwallet",
+		"params": []string{
 			rawtransaction,
 		},
 	}
@@ -241,14 +239,14 @@ func SendSignedTransaction(transaction string) string {
 		log.Printf("Empty transaction provided")
 		return ""
 	}
-	
+
 	log.Printf("Sending signed transaction to network")
 
-	payload := map[string]interface{} {
+	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
-		"id": "op_cat_send_tx",
-		"method": "sendrawtransaction",
-		"params": []string { 
+		"id":      "op_cat_send_tx",
+		"method":  "sendrawtransaction",
+		"params": []string{
 			transaction,
 		},
 	}
@@ -265,25 +263,25 @@ func ExtractResult(responseStr string) string {
 		log.Print("Empty response string")
 		return ""
 	}
-	
+
 	resp := response{}
 	err := json.Unmarshal([]byte(responseStr), &resp)
 	if err != nil {
 		log.Printf("Failed to unmarshal response: %v", err)
 		return ""
 	}
-	
+
 	if resp.Error != nil {
 		log.Printf("RPC error: code=%d, message=%s", resp.Error.Code, resp.Error.Message)
 		return ""
 	}
-	
+
 	var resultStr string
 	err = json.Unmarshal(resp.Result, &resultStr)
 	if err == nil {
 		return resultStr
 	}
-	
+
 	return string(resp.Result)
 }
 
@@ -297,7 +295,7 @@ func CreateOPReturnTransaction(data string) string {
 	DecodeRawTransaction(rawtscn)
 	signtscn := SignRawTransaction(rawtscn)
 	var sgn signedtx
-	err:= json.Unmarshal([]byte(signtscn), &sgn)
+	err := json.Unmarshal([]byte(signtscn), &sgn)
 	if err != nil {
 		log.Printf("Failed to unmarshal response: %v", err)
 		return ""
@@ -308,8 +306,7 @@ func CreateOPReturnTransaction(data string) string {
 	return sendtscn
 }
 
-func InitOPReturnRPC(endpoint string, user string, auth string) {
+func InitOPReturnRPC(endpoint string, auth string) {
 	BTCEndpoint = endpoint
-	User = user
 	Auth = auth
 }

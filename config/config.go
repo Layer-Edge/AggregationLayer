@@ -33,13 +33,16 @@ type Config struct {
 	} `yaml:"layer-edge-rpc"`
 
 	Cosmos struct {
-		ChainID       string `yaml:"chainId"`
-		RpcEndpoint   string `yaml:"rpcEndpoint"`
-		AccountPrefix string `yaml:"accountPrefix"`
-		NodeAddr 	  string `yaml:"nodeAddr"`
-		ContractAddr 	  string `yaml:"contractAddr"`
-		Keyring 	  string `yaml:"keyring"`
-		From 	  string `yaml:"from"`
+		ChainID                   string `yaml:"chainId"`
+		RpcEndpoint               string `yaml:"rpcEndpoint"`
+		AccountPrefix             string `yaml:"accountPrefix"`
+		NodeAddr                  string `yaml:"nodeAddr"`
+		ContractAddr              string `yaml:"contractAddr"`
+		Keyring                   string `yaml:"keyring"`
+		From                      string `yaml:"from"`
+		KeyringBackend            string `yaml:"keyringBackend"`
+		KeyName                   string `yaml:"keyName"`
+		MerkleTreeStorageContract string `yaml:"merkleTreeStorageContract"`
 	} `yaml:"cosmos"`
 
 	PostgresConnectionURI string `yaml:"postgres-connection-uri"`
@@ -86,6 +89,29 @@ func validateConfig(cfg *Config) {
 
 	if cfg.PostgresConnectionURI == "" {
 		log.Fatal("Postgres Connection URI is required in config file")
+	}
+	if cfg.Auth == "" {
+		log.Fatal("BTC Auth is not given")
+	}
+
+	if cfg.Cosmos.ChainID == "" {
+		log.Fatal("Cosmos ChainID is required")
+	}
+
+	if cfg.Cosmos.RpcEndpoint == "" {
+		log.Fatal("Cosmos RpcEndpoint is required")
+	}
+
+	if cfg.Cosmos.KeyringBackend == "" {
+		log.Fatal("Cosmos KeyringBackend is required")
+	}
+
+	if cfg.Cosmos.KeyName == "" {
+		log.Fatal("Cosmos KeyName is required")
+	}
+
+	if cfg.Cosmos.MerkleTreeStorageContract == "" {
+		log.Fatal("Cosmos MerkleTreeStorageContract is required")
 	}
 
 	if cfg.WriteIntervalBlock == 0 {

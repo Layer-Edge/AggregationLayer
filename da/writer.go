@@ -35,6 +35,28 @@ func CallScriptWithData(data string) ([]byte, error) {
 	return out, err
 }
 
+func CallContractStoreMerkleTree(cfg *config.Config, btc_tx_hash string, root string, leaves string) error {
+	contractAddr := "cosmos1ufs3tlq4umljk0qfe8k5ya0x6hpavn897u2cnf9k0en9jr7qarqqt56709"
+	jsonMsg := fmt.Sprintf(`{"store_merkle_tree":{"id":"%s","root":"%s","leaves":%s,"metadata":""}}`, btc_tx_hash, root, leaves)
+
+	cmd := exec.Command("gaiad", "tx", "wasm", "execute", contractAddr, jsonMsg,
+		"--from", cfg.Cosmos.KeyName,
+		"--keyring-backend", cfg.Cosmos.KeyringBackend,
+		"--gas", "400000",
+		"--node", cfg.Cosmos.RpcEndpoint,
+		"--chain-id", cfg.Cosmos.ChainID,
+	)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error while running gaiad cli: %v", err)
+	}
+	return nil
+}
+
 func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client) ([]byte, error) {
 	// layerEdgeHeader, err := layerEdgeClient.HeaderByNumber(context.Background(), nil)
 	// if err != nil {
@@ -79,7 +101,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		log.Fatal("Error creating layerEdgeClient: ", err)
 	}
 
-	InitOPReturnRPC(cfg.BtcEndpoint, cfg.User, cfg.Auth)
+	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth)
 
 	counter := 0
 	aggr := Aggregator{data: ""}
@@ -111,6 +133,18 @@ func HashBlockSubscriber(cfg *config.Config) {
 			log.Println("Error writing -> ", err, "; out:", string(hash))
 			return
 		}
+
+		leaves, err := json.Marshal(strings.Split(aggr.data, ","))
+		if err != nil {
+			log.Println("Error parsing merkle tree leaves  -> ", err, "; out:", string(hash))
+			return
+		}
+		err = CallContractStoreMerkleTree(cfg, strings.ReplaceAll(string(hash[:]), "\n", ""), merkle_root, string(leaves))
+		if err != nil {
+			log.Println("Error storing merkle  -> ", err, "; out:", string(hash))
+			return
+		}
+
 		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
 
 		out, err := clients.SendCosmosTXWithData(string(merkle_root), "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d")
