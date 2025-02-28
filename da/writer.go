@@ -25,17 +25,7 @@ import (
 var (
 	BtcCliPath     = ""
 	BashScriptPath = ""
-	Risc0Path      = ""
 )
-
-func CallZKScriptWithData(data string) ([]byte, error) {
-	cmd := exec.Command(BashScriptPath+"/run_merkle_tree.sh", data)
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "RISC0_PATH="+Risc0Path)
-	log.Println("Running Merkle-tree script", cmd)
-	out, err := cmd.Output()
-	return out, err
-}
 
 func CallScriptWithData(data string) ([]byte, error) {
 	cmd := exec.Command(BashScriptPath+"/op_return_transaction.sh", data)
@@ -56,8 +46,8 @@ func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client
 	// log.Println("Latest LayerEdge Block Hash:", dhash.Hex())
 
 	data := append([]byte(protocolId), msg...)
-	hash, err := CallScriptWithData(hex.EncodeToString(data))
-	return hash, err
+	hash := CreateOPReturnTransaction(hex.EncodeToString(data))
+	return []byte(hash), nil
 }
 
 func HashBlockSubscriber(cfg *config.Config) {
@@ -90,7 +80,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 
 	BashScriptPath = cfg.BashScriptPath
 	BtcCliPath = cfg.BtcCliPath
-	Risc0Path = cfg.Risc0Path
 
 	defer btcReader.Reset()
 	defer dataReader.Reset()
@@ -99,6 +88,8 @@ func HashBlockSubscriber(cfg *config.Config) {
 	if err != nil {
 		log.Fatal("Error creating layerEdgeClient: ", err)
 	}
+
+	InitOPReturnRPC(cfg.BtcEndpoint, cfg.User, cfg.Auth)
 
 	counter := 0
 	aggr := Aggregator{data:""}
@@ -119,23 +110,17 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return hash, err
 	}
 
-	fnWrite := func() {
-		// Generate and process proof
-		merkel_root := prf.GenerateAggregatedProof(aggr.data)
-		log.Println("Aggregated Data: ", aggr.data)
-		log.Println("Aggregated Proof: ", merkel_root)
-		aggr.data = ""
-
+	fnCosmos := func(str string) []byte {
 		payload := map[string]string{
 			"recipient": "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d",
-			"memo":      string(merkel_root[:]),
+			"memo":      string(str),
 		}
 
 		// Convert payload to JSON
 		jsonPayload, err := json.Marshal(payload)
 		if err != nil {
 			log.Fatalf("Failed to marshal JSON: %v", err)
-			return
+			return nil
 		}
 
 		// Create HTTP client
@@ -150,7 +135,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonPayload))
 		if err != nil {
 			log.Fatalf("Failed to create request to Cosmos: %v", err)
-			return
+			return nil
 		}
 		req.Header.Set("Content-Type", "application/json")
 
@@ -158,7 +143,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			log.Fatalf("Failed to send data to Cosmos: %v", err)
-			return
+			return nil
 		}
 		defer resp.Body.Close()
 
@@ -166,24 +151,35 @@ func HashBlockSubscriber(cfg *config.Config) {
 		out, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Fatalf("Failed to read Cosmos API response: %v", err)
-			return
+			return nil
 		}
 		fmt.Print(1)
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
 			log.Print("Cosmos API returned non-OK status: %d", resp.StatusCode)
-			return
+			return nil
 		}
 		log.Print("Successfully sent data: %v", resp)
 		// fmt.Print(out)
-		var dat map[string]interface{}
-		if err := json.Unmarshal(out, &dat); err != nil {
-			panic(err)
-		}
+		return out
+	}
+
+	fnWrite := func() {
+		// Generate and process proof
+		merkel_root := prf.GenerateAggregatedProof(aggr.data)
+		log.Println("Aggregated Data: ", aggr.data)
+		log.Println("Aggregated Proof: ", merkel_root)
+		aggr.data = ""
+		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
+		out := fnCosmos(merkel_root)
+		dat := map[string]interface{}{}
+		// if err := json.Unmarshal(out, &dat); err != nil {
+		// 	panic(err)
+		// }
 		dat["proofs"] = lst
 		lst = make([]map[string]string, 0)
 
-		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
+		// hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
 
 		if err != nil {
 			log.Println("Error writing -> ", err, "; out:", string(hash))

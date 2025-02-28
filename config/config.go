@@ -17,6 +17,10 @@ type Config struct {
 	ZmqEndpointDataBlock string `yaml:"zmq-endpoint-data-block"`
 
 	BtcCliPath     string `yaml:"bitcoin-cli-path"`
+	BtcEndpoint    string `yaml:"bitcoin-endpoint"`
+	User			string `yaml:"bitcoin-user"`
+	Auth 		 	string `yaml:"bitcoin-auth"`
+
 	BashScriptPath string `yaml:"bash-script-path"`
 
 	EnableWriter bool `yaml:"enable-writer"`
@@ -39,18 +43,6 @@ type Config struct {
 		DB         string `yaml:"db"`
 		Collection string `yaml:"collection"`
 	} `yaml:"mongo"`
-	// PrivateKey struct {
-	// 	// internal key pair is used for tweaking
-	// 	Internal string `yaml:"internal"`
-	// 	// bob key pair is used for signing reveal tx
-	// 	Signer string `yaml:"signer"`
-	// } `yaml:"private-key"`
-
-	// Relayer struct {
-	// 	Host string `yaml:"host"`
-	// 	User string `yaml:"user"`
-	// 	Pass string `yaml:"pass"`
-	// } `yaml:"relayer"`
 }
 
 // Define a command-line flag
@@ -75,8 +67,6 @@ func GetConfig() Config {
 	if *IsWriter {
 		cfg.EnableWriter = true
 	}
-
-	// readEnv(&cfg)
 
 	return cfg
 }
@@ -118,18 +108,3 @@ func readFile(cfg *Config) {
 
 	validateConfig(cfg)
 }
-
-// func readEnv(cfg *Config) {
-// 	err := godotenv.Load()
-// 	if err != nil {
-// 		log.Fatal("Error loading .env file")
-// 	}
-//
-// 	cfg.PrivateKey.Internal = os.Getenv("PRIVATE_KEY_INTERNAL")
-// 	cfg.PrivateKey.Signer = os.Getenv("PRIVATE_KEY_SIGNER")
-// 	log.Println(cfg.PrivateKey.Internal, cfg.PrivateKey.Signer)
-//
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// }
