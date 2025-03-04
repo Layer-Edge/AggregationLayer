@@ -36,6 +36,10 @@ type Config struct {
 		ChainID       string `yaml:"chainId"`
 		RpcEndpoint   string `yaml:"rpcEndpoint"`
 		AccountPrefix string `yaml:"accountPrefix"`
+		NodeAddr 	  string `yaml:"nodeAddr"`
+		ContractAddr 	  string `yaml:"contractAddr"`
+		Keyring 	  string `yaml:"keyring"`
+		From 	  string `yaml:"from"`
 	} `yaml:"cosmos"`
 
 	Mongo struct {

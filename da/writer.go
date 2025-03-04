@@ -90,6 +90,8 @@ func HashBlockSubscriber(cfg *config.Config) {
 	}
 
 	InitOPReturnRPC(cfg.BtcEndpoint, cfg.User, cfg.Auth)
+	cosmosCfg := cfg.Cosmos
+	InitCosmosParams(cosmosCfg.ContractAddr, cosmosCfg.NodeAddr, cosmosCfg.ChainID, cosmosCfg.Keyring, cosmosCfg.From)
 
 	counter := 0
 	aggr := Aggregator{data:""}
@@ -110,11 +112,18 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return hash, err
 	}
 
-	fnCosmos := func(str string) []byte {
+	fnCosmos := func(btcHash string, root string, leaves string) []byte {
+
+		status, message := CallContractStoreMerkleTree(btcHash, root, leaves)
+		return []byte(message)
+
+		if status {
+		}
 		payload := map[string]string{
 			"recipient": "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d",
-			"memo":      string(str),
+			"memo":      btcHash,
 		}
+
 
 		// Convert payload to JSON
 		jsonPayload, err := json.Marshal(payload)
@@ -169,9 +178,9 @@ func HashBlockSubscriber(cfg *config.Config) {
 		merkel_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
 		log.Println("Aggregated Proof: ", merkel_root)
-		aggr.data = ""
 		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
-		out := fnCosmos(merkel_root)
+		out := fnCosmos(string(hash), merkel_root, aggr.data)
+		aggr.data = ""
 		dat := map[string]interface{}{}
 		// if err := json.Unmarshal(out, &dat); err != nil {
 		// 	panic(err)

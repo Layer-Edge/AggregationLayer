@@ -133,7 +133,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 			log.Printf("UTXO : %s", u)
 		}
 
-		log.Printf("Processing UTXO: txid=%s, vout=%d, amount=%f", u.Txid, u.Vout, u.Amount)
+		log.Printf("Processing UTXO: txid=%lf, vout=%d, amount=%lf", u.Txid, u.Vout, u.Amount)
 
 		inputData := map[string]interface{}{
 			"txid": u.Txid,
@@ -143,7 +143,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 		totalAmt += float64(u.Amount)
 		required = CalculateRequired(numInputs+1, length)
 
-		log.Printf("Current total: %f BTC, required: %f BTC", totalAmt, required)
+		log.Printf("Current total: %lf BTC, required: %lf BTC", totalAmt, required)
 
 		if totalAmt >= required {
 			break
@@ -153,7 +153,9 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 			return []map[string]interface{}{}, 0.0
 		}
 	}
-	return inputs, totalAmt - required
+	change := ((totalAmt - required) * 100000000) / float64(100000000)
+	log.Printf("Inputs: %v, Change: %s", inputs, change)
+	return inputs, float64(change)
 }
 
 func CreateRawTransaction(inputs []map[string]interface{}, address string, change float64, data string) string {
