@@ -2,7 +2,9 @@ package da
 
 import (
 	// "context"
+	"context"
 	"encoding/hex"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 
@@ -19,7 +21,19 @@ import (
 	"time"
 
 	"github.com/Layer-Edge/bitcoin-da/config"
+	"github.com/Layer-Edge/bitcoin-da/models"
 )
+
+type CosmosTxData struct {
+	Success         bool   `json:"success"`
+	From            string `json:"from"`
+	To              string `json:"to"`
+	Amount          string `json:"amount"`
+	TransactionHash string `json:"transactionHash"`
+	Memo            string `json:"memo"`
+	BlockHeight     string `json:"blockHeight"` // can use int64 if you want to parse it directly
+	GasUsed         string `json:"gasUsed"`     // same here
+}
 
 // To be set from Config
 var (
@@ -62,17 +76,10 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return
 	}
 
-	mongoc, err := NewMongoSender(
-		cfg.Mongo.Endpoint,   // your MongoDB URI
-		cfg.Mongo.DB,         // your database name
-		cfg.Mongo.Collection, // your collection name
-	)
+	err := models.InitDB(cfg.PostgresConnectionURI)
+
 	if err != nil {
-		log.Fatal(err)
-	}
-	// err := mongoc.Init(cfg)
-	if err != nil {
-		log.Fatal("Error creating Mongo Client: ", err)
+		log.Fatal("Error initializing DB Connection: ", err)
 		return
 	}
 
@@ -94,15 +101,14 @@ func HashBlockSubscriber(cfg *config.Config) {
 	InitCosmosParams(cosmosCfg.ContractAddr, cosmosCfg.NodeAddr, cosmosCfg.ChainID, cosmosCfg.Keyring, cosmosCfg.From)
 
 	counter := 0
-	aggr := Aggregator{data:""}
+	aggr := Aggregator{data: ""}
 	prf := ZKProof{}
-	lst := make([]map[string]string, 0)
+	proof_list := []string{}
 
 	fnAgg := func(msg [][]byte) bool {
 		log.Println("Aggregating message: ", string(msg[0]), string(msg[1]))
 		aggr.Aggregate(msg[1])
-		m := map[string]string{"length": string(len(msg[1])), "data": string(msg[1])}
-		lst = append(lst, m)
+		proof_list = append(proof_list, string(msg[1]))
 		return true
 	}
 
@@ -123,7 +129,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 			"recipient": "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d",
 			"memo":      btcHash,
 		}
-
 
 		// Convert payload to JSON
 		jsonPayload, err := json.Marshal(payload)
@@ -175,35 +180,64 @@ func HashBlockSubscriber(cfg *config.Config) {
 
 	fnWrite := func() {
 		// Generate and process proof
-		merkel_root := prf.GenerateAggregatedProof(aggr.data)
+		merle_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
-		log.Println("Aggregated Proof: ", merkel_root)
-		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
-		out := fnCosmos(string(hash), merkel_root, aggr.data)
+		log.Println("Aggregated Proof: ", merle_root)
 		aggr.data = ""
-		dat := map[string]interface{}{}
-		// if err := json.Unmarshal(out, &dat); err != nil {
-		// 	panic(err)
-		// }
-		dat["proofs"] = lst
-		lst = make([]map[string]string, 0)
-
-		// hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
+		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merle_root)})
 
 		if err != nil {
 			log.Println("Error writing -> ", err, "; out:", string(hash))
 			return
 		}
 		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
-		dat["btc_tx_hash"] = strings.ReplaceAll(string(hash[:]), "\n", "")
-		out, err = json.Marshal(dat)
-		log.Print("Sending proof info to mongo:", string(out))
-		// Send data to Mongo
-		err = mongoc.SendData(out)
+
+		out := fnCosmos(merle_root)
+		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
+		cosmos_resp := CosmosTxData{}
+
+		err = json.Unmarshal(out, &cosmos_resp)
 		if err != nil {
-			log.Fatalf("Failed to send data to Mongo: %v", err)
+			log.Fatalf("Failed to parse cosmos response: %v", err)
 			return
 		}
+
+		block_height, err := strconv.ParseInt(cosmos_resp.BlockHeight, 10, 64)
+		if err != nil {
+			log.Println("Error converting block height ", err)
+			return
+		}
+
+		gas_used, err := strconv.ParseInt(cosmos_resp.GasUsed, 10, 64)
+		if err != nil {
+			log.Println("Error converting gas used ", err)
+			return
+		}
+
+		ap := &models.AggregatedProof{
+			BTCTxHash:       &btc_tx_hash,
+			BlockHeight:     block_height,
+			From:            cosmos_resp.From,
+			GasUsed:         gas_used,
+			AggregateProof:  []byte(merle_root),
+			Proofs:          proof_list,
+			To:              cosmos_resp.To,
+			TransactionHash: cosmos_resp.TransactionHash,
+			Amount:          cosmos_resp.Amount,
+			Success:         cosmos_resp.Success,
+			Timestamp:       time.Now().UTC(),
+		}
+		proof_list = make([]string, 0)
+
+		log.Printf("Storing proof info to Postgres DB: %v", *ap)
+		_, err = models.DB.NewInsert().Model(ap).Exec(context.Background())
+		if err != nil {
+			log.Fatalf("Insert failed: %v", err)
+			return
+		}
+
+		log.Println("Inserted AggregatedProof successfully")
+
 		// if !btcReader.Process(fnBtc, [][]byte{nil, prf[:]}) {
 		// 	log.Println("Failed to write proof")
 		// }
@@ -218,7 +252,13 @@ func HashBlockSubscriber(cfg *config.Config) {
 			if !dataReader.Validate(ok, msg) {
 				continue
 			}
-			dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}
+			// Add error handling for SendChan operation
+			select {
+			case dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}:
+				// Message sent successfully
+			default:
+				log.Println("Warning: Could not send response message - channel full or closed")
+			}
 			counter++
 			dataReader.Process(fnAgg, msg)
 			// Write to Bitcoin

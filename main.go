@@ -6,6 +6,7 @@ import (
 )
 
 var cfg = config.GetConfig()
+
 // var processor = store.GetProcessor(cfg)
 // var channelReader = store.GetChannelReader(cfg)
 // var relayer = store.GetRelayer(cfg)
