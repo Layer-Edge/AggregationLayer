@@ -1,4 +1,4 @@
-package da
+package clients
 
 import (
 	"bytes"
@@ -10,12 +10,9 @@ import (
 )
 
 // Configuration constants
-var (
-	CosmosContractAddr = ""
-	CosmosNodeAddr     = ""
-	CosmosChainId      = ""
-	CosmosKeyring      = ""
-	CosmosSrc          = ""
+const (
+	CosmosBashScriptPath = "/home/ubuntu/repo/bitcoin-da/scripts"
+	DefaultCosmosAddress = "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d"
 )
 
 type CosmosTxData struct {

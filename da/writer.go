@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/Layer-Edge/bitcoin-da/clients"
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/models"
 )
@@ -82,8 +83,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 	}
 
 	InitOPReturnRPC(cfg.BtcEndpoint, cfg.User, cfg.Auth)
-	cosmosCfg := cfg.Cosmos
-	InitCosmosParams(cosmosCfg.ContractAddr, cosmosCfg.NodeAddr, cosmosCfg.ChainID, cosmosCfg.Keyring, cosmosCfg.From)
 
 	counter := 0
 	aggr := Aggregator{data: ""}
@@ -103,76 +102,13 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return hash, err
 	}
 
-<<<<<<< HEAD
-	fnCosmos := func(btcHash string, root string, leaves string) []byte {
-
-		status, message := CallContractStoreMerkleTree(btcHash, root, leaves)
-		return []byte(message)
-
-		if status {
-		}
-		payload := map[string]string{
-			"recipient": "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d",
-			"memo":      btcHash,
-		}
-
-		// Convert payload to JSON
-		jsonPayload, err := json.Marshal(payload)
-		if err != nil {
-			log.Fatalf("Failed to marshal JSON: %v", err)
-			return nil
-		}
-
-		// Create HTTP client
-		httpClient := &http.Client{
-			Timeout: 10 * time.Second,
-		}
-
-		// API endpoint
-		apiURL := "https://cosmos-api-hcf6.onrender.com/send-tokens"
-
-		// Create HTTP request
-		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			log.Fatalf("Failed to create request to Cosmos: %v", err)
-			return nil
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		// Send the request
-		resp, err := httpClient.Do(req)
-		if err != nil {
-			log.Fatalf("Failed to send data to Cosmos: %v", err)
-			return nil
-		}
-		defer resp.Body.Close()
-
-		// Read response body
-		out, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatalf("Failed to read Cosmos API response: %v", err)
-			return nil
-		}
-		fmt.Print(1)
-		// Check response status
-		if resp.StatusCode != http.StatusOK {
-			log.Print("Cosmos API returned non-OK status: %d", resp.StatusCode)
-			return nil
-		}
-		log.Print("Successfully sent data: %v", resp)
-		// fmt.Print(out)
-		return out
-	}
-
-=======
->>>>>>> 5f8277f (fix: removed fnCosmos and refactored cosmos logic from writer.go to cosmos.go)
 	fnWrite := func() {
 		// Generate and process proof
-		merle_root := prf.GenerateAggregatedProof(aggr.data)
+		merkle_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
-		log.Println("Aggregated Proof: ", merle_root)
+		log.Println("Aggregated Proof: ", merkle_root)
 		aggr.data = ""
-		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merle_root)})
+		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkle_root)})
 
 		if err != nil {
 			log.Println("Error writing -> ", err, "; out:", string(hash))
@@ -180,14 +116,14 @@ func HashBlockSubscriber(cfg *config.Config) {
 		}
 		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
 
-		out, err := SendCosmosTXWithData(string(merle_root), "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d")
+		out, err := clients.SendCosmosTXWithData(string(merkle_root), "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d")
 		if err != nil {
 			log.Fatalf("%v", err)
 			return
 		}
 
 		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
-		cosmos_resp := CosmosTxData{}
+		cosmos_resp := clients.CosmosTxData{}
 
 		err = json.Unmarshal(out, &cosmos_resp)
 		if err != nil {
@@ -196,7 +132,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		}
 
 		aggProof, err := models.CreateAggregatedProof(
-			merle_root,
+			merkle_root,
 			proof_list,
 			btc_tx_hash,
 			cosmos_resp,
