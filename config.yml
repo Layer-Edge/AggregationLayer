@@ -14,11 +14,6 @@ layer-edge-rpc:
   http: "https://testnet-rpc.layeredge.io/" 
   wss: "wss://testnet-rpc.layeredge.io/"
 
-mongo:
-  endpoint: "mongodb+srv://admin:admin@localhost:27017/"
-  db: "devnet"
-  collection: "test"
-
 private-key:
   internal: "get-from-env" # PRIVATE_KEY_INTERNAL
   signer: "get-from-env" # PRIVATE_KEY_SIGNER

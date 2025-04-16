@@ -2,9 +2,8 @@ package da
 
 import (
 	// "context"
-	"context"
+
 	"encoding/hex"
-	"strconv"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 
@@ -16,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/models"
@@ -197,41 +195,18 @@ func HashBlockSubscriber(cfg *config.Config) {
 			return
 		}
 
-		block_height, err := strconv.ParseInt(cosmos_resp.BlockHeight, 10, 64)
-		if err != nil {
-			log.Println("Error converting block height ", err)
-			return
-		}
-
-		gas_used, err := strconv.ParseInt(cosmos_resp.GasUsed, 10, 64)
-		if err != nil {
-			log.Println("Error converting gas used ", err)
-			return
-		}
-
-		ap := &models.AggregatedProof{
-			BTCTxHash:       &btc_tx_hash,
-			BlockHeight:     block_height,
-			From:            cosmos_resp.From,
-			GasUsed:         gas_used,
-			AggregateProof:  []byte(merle_root),
-			Proofs:          proof_list,
-			To:              cosmos_resp.To,
-			TransactionHash: cosmos_resp.TransactionHash,
-			Amount:          cosmos_resp.Amount,
-			Success:         cosmos_resp.Success,
-			Timestamp:       time.Now().UTC(),
-		}
+		aggProof, err := models.CreateAggregatedProof(
+			merle_root,
+			proof_list,
+			btc_tx_hash,
+			cosmos_resp,
+		)
 		proof_list = make([]string, 0)
-
-		log.Printf("Storing proof info to Postgres DB: %v", *ap)
-		_, err = models.DB.NewInsert().Model(ap).Exec(context.Background())
 		if err != nil {
-			log.Fatalf("Insert failed: %v", err)
-			return
+			log.Fatalf("Failed to store Aggregated Proof in DB: %v", err)
 		}
 
-		log.Println("Inserted AggregatedProof successfully")
+		log.Println("Stored Aggregated Proof: %v", aggProof)
 
 		// if !btcReader.Process(fnBtc, [][]byte{nil, prf[:]}) {
 		// 	log.Println("Failed to write proof")

@@ -43,12 +43,6 @@ type Config struct {
 	} `yaml:"cosmos"`
 
 	PostgresConnectionURI string `yaml:"postgres-connection-uri"`
-
-	Mongo struct {
-		Endpoint   string `yaml:"endpoint"`
-		DB         string `yaml:"db"`
-		Collection string `yaml:"collection"`
-	} `yaml:"mongo"`
 }
 
 // Define a command-line flag
