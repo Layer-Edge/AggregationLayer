@@ -31,3 +31,4 @@ cosmos:
   rpcEndpoint: "http://34.31.74.109:26657/"
   accountPrefix: "layeredge"
 
+postgres-connection-uri: "postgres://user:password@localhost:5432/le-proofs?sslmode=disable"

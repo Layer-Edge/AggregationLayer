@@ -5,6 +5,7 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
 var DB *bun.DB
@@ -15,7 +16,8 @@ func InitDB(dsn string) error {
 		return err
 	}
 
-	DB = bun.NewDB(sqldb, nil)
+	// Create a new Bun DB instance with PostgreSQL dialect
+	DB = bun.NewDB(sqldb, pgdialect.New())
 
 	return nil
 }
