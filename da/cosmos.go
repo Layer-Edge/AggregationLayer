@@ -1,48 +1,83 @@
 package da
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"os/exec"
-	"strings"
+	"io/ioutil"
+	"net/http"
+	"time"
 )
 
 // Configuration constants
 var (
 	CosmosContractAddr = ""
-	CosmosNodeAddr = ""
-	CosmosChainId  = ""
-	CosmosKeyring = ""
-	CosmosSrc = ""
+	CosmosNodeAddr     = ""
+	CosmosChainId      = ""
+	CosmosKeyring      = ""
+	CosmosSrc          = ""
 )
 
-func InitCosmosParams(contractAddr string, node string, id string, keyring string, from string) {
-	CosmosContractAddr = contractAddr
-	CosmosNodeAddr = node
-	CosmosChainId  = id
-	CosmosKeyring = keyring
-	CosmosSrc = from
+type CosmosTxData struct {
+	Success         bool   `json:"success"`
+	From            string `json:"from"`
+	To              string `json:"to"`
+	Amount          string `json:"amount"`
+	TransactionHash string `json:"transactionHash"`
+	Memo            string `json:"memo"`
+	BlockHeight     string `json:"blockHeight"` // can use int64 if you want to parse it directly
+	GasUsed         string `json:"gasUsed"`     // same here
 }
 
-func CallContractStoreMerkleTree(btc_tx_hash string, root string, leaves string) (bool, string) {
-	leaves_arr_str := strings.Join(strings.Split(leaves, ","), "\",\"")
-	jsonMsg := fmt.Sprintf(`{"store_merkle_tree":{"id":"%s","root":"%s","leaves":["%s"],"metadata":""}}`, btc_tx_hash, root, leaves_arr_str)
+// Init initializes the Cosmos client with the provided configuration
+func SendCosmosTXWithData(data string, addr string) ([]byte, error) {
+	// Construct the API endpoint URL
+	apiURL := "https://cosmos-api-hcf6.onrender.com/send-tokens"
 
-	fmt.Println("%s, %s, %s, %s, %s, %s", CosmosContractAddr, jsonMsg, CosmosSrc, CosmosKeyring, CosmosNodeAddr, CosmosChainId)
-	cmd := exec.Command("gaiad", "tx", "wasm", "execute", CosmosContractAddr, jsonMsg,
-		"--from", CosmosSrc,
-		"--keyring-backend", CosmosKeyring,
-		"--gas", "400000",
-		"--node", CosmosNodeAddr,
-		"--chain-id", CosmosChainId,
-		"-y",
-	)
-
-	out, err := cmd.Output()
-	if err != nil {
-		fmt.Println("Error:", err)
-		return false, ""
+	// Prepare the request payload
+	payload := map[string]string{
+		"recipient": addr,
+		"memo":      data[1:], // Assuming data starts with a special character, remove it
 	}
-	hash := strings.Split(string(out), "txhash: ")
-	fmt.Println(hash[0], "txhash:", hash[1])
-	return true, hash[1]
+
+	// Convert payload to JSON
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %v", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Set content type header
+	req.Header.Set("Content-Type", "application/json")
+
+	// Create HTTP client and send request
+	client := &http.Client{
+		Timeout: 10 * time.Second, // Set a reasonable timeout
+	}
+
+	// Execute the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// Check HTTP status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request failed with status %d: %s",
+			resp.StatusCode, string(body))
+	}
+
+	return body, nil
 }

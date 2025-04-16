@@ -9,12 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
-	"bytes"
+
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,17 +21,6 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/models"
 )
-
-type CosmosTxData struct {
-	Success         bool   `json:"success"`
-	From            string `json:"from"`
-	To              string `json:"to"`
-	Amount          string `json:"amount"`
-	TransactionHash string `json:"transactionHash"`
-	Memo            string `json:"memo"`
-	BlockHeight     string `json:"blockHeight"` // can use int64 if you want to parse it directly
-	GasUsed         string `json:"gasUsed"`     // same here
-}
 
 // To be set from Config
 var (
@@ -118,6 +105,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return hash, err
 	}
 
+<<<<<<< HEAD
 	fnCosmos := func(btcHash string, root string, leaves string) []byte {
 
 		status, message := CallContractStoreMerkleTree(btcHash, root, leaves)
@@ -178,6 +166,8 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return out
 	}
 
+=======
+>>>>>>> 5f8277f (fix: removed fnCosmos and refactored cosmos logic from writer.go to cosmos.go)
 	fnWrite := func() {
 		// Generate and process proof
 		merle_root := prf.GenerateAggregatedProof(aggr.data)
@@ -192,7 +182,12 @@ func HashBlockSubscriber(cfg *config.Config) {
 		}
 		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
 
-		out := fnCosmos(merle_root)
+		out, err := SendCosmosTXWithData(string(merle_root), "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d")
+		if err != nil {
+			log.Fatalf("%v", err)
+			return
+		}
+
 		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
 		cosmos_resp := CosmosTxData{}
 
