@@ -54,7 +54,7 @@ func SendCosmosTXWithData(data string, addr string) ([]byte, error) {
 
 	// Create HTTP client and send request
 	client := &http.Client{
-		Timeout: 10 * time.Second, // Set a reasonable timeout
+		Timeout: 40 * time.Second, // Set a reasonable timeout
 	}
 
 	// Execute the request

@@ -3,12 +3,11 @@ package da
 import (
 	// "context"
 
-	"encoding/hex"
-
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
 
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -68,8 +67,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 		log.Fatal("Error initializing DB Connection: ", err)
 		return
 	}
-
-	// client := &CosmosClient{}
 
 	BashScriptPath = cfg.BashScriptPath
 	BtcCliPath = cfg.BtcCliPath
@@ -143,10 +140,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 		}
 
 		log.Println("Stored Aggregated Proof: %v", aggProof)
-
-		// if !btcReader.Process(fnBtc, [][]byte{nil, prf[:]}) {
-		// 	log.Println("Failed to write proof")
-		// }
 	}
 
 	// Listen for messages
