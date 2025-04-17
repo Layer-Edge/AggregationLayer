@@ -16,10 +16,10 @@ type Config struct {
 	ZmqEndpointHashBlock string `yaml:"zmq-endpoint-hash-block"`
 	ZmqEndpointDataBlock string `yaml:"zmq-endpoint-data-block"`
 
-	BtcCliPath     string `yaml:"bitcoin-cli-path"`
-	BtcEndpoint    string `yaml:"bitcoin-endpoint"`
-	User			string `yaml:"bitcoin-user"`
-	Auth 		 	string `yaml:"bitcoin-auth"`
+	BtcCliPath  string `yaml:"bitcoin-cli-path"`
+	BtcEndpoint string `yaml:"bitcoin-endpoint"`
+	User        string `yaml:"bitcoin-user"`
+	Auth        string `yaml:"bitcoin-auth"`
 
 	BashScriptPath string `yaml:"bash-script-path"`
 
@@ -42,11 +42,7 @@ type Config struct {
 		From 	  string `yaml:"from"`
 	} `yaml:"cosmos"`
 
-	Mongo struct {
-		Endpoint   string `yaml:"endpoint"`
-		DB         string `yaml:"db"`
-		Collection string `yaml:"collection"`
-	} `yaml:"mongo"`
+	PostgresConnectionURI string `yaml:"postgres-connection-uri"`
 }
 
 // Define a command-line flag
@@ -86,6 +82,10 @@ func validateConfig(cfg *Config) {
 
 	if cfg.BashScriptPath == "" {
 		log.Fatal("Bash Script Path not given")
+	}
+
+	if cfg.PostgresConnectionURI == "" {
+		log.Fatal("Postgres Connection URI is required in config file")
 	}
 
 	if cfg.WriteIntervalBlock == 0 {

@@ -14,11 +14,6 @@ layer-edge-rpc:
   http: "https://testnet-rpc.layeredge.io/" 
   wss: "wss://testnet-rpc.layeredge.io/"
 
-mongo:
-  endpoint: "mongodb+srv://admin:admin@localhost:27017/"
-  db: "devnet"
-  collection: "test"
-
 private-key:
   internal: "get-from-env" # PRIVATE_KEY_INTERNAL
   signer: "get-from-env" # PRIVATE_KEY_SIGNER
@@ -36,3 +31,4 @@ cosmos:
   rpcEndpoint: "http://34.31.74.109:26657/"
   accountPrefix: "layeredge"
 
+postgres-connection-uri: "postgres://user:password@localhost:5432/le-proofs?sslmode=disable"

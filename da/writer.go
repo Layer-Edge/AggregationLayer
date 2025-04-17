@@ -2,23 +2,22 @@ package da
 
 import (
 	// "context"
-	"encoding/hex"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
-	"bytes"
+
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
+	"github.com/Layer-Edge/bitcoin-da/clients"
 	"github.com/Layer-Edge/bitcoin-da/config"
+	"github.com/Layer-Edge/bitcoin-da/models"
 )
 
 // To be set from Config
@@ -62,21 +61,12 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return
 	}
 
-	mongoc, err := NewMongoSender(
-		cfg.Mongo.Endpoint,   // your MongoDB URI
-		cfg.Mongo.DB,         // your database name
-		cfg.Mongo.Collection, // your collection name
-	)
+	err := models.InitDB(cfg.PostgresConnectionURI)
+
 	if err != nil {
-		log.Fatal(err)
-	}
-	// err := mongoc.Init(cfg)
-	if err != nil {
-		log.Fatal("Error creating Mongo Client: ", err)
+		log.Fatal("Error initializing DB Connection: ", err)
 		return
 	}
-
-	// client := &CosmosClient{}
 
 	BashScriptPath = cfg.BashScriptPath
 	BtcCliPath = cfg.BtcCliPath
@@ -90,19 +80,16 @@ func HashBlockSubscriber(cfg *config.Config) {
 	}
 
 	InitOPReturnRPC(cfg.BtcEndpoint, cfg.User, cfg.Auth)
-	cosmosCfg := cfg.Cosmos
-	InitCosmosParams(cosmosCfg.ContractAddr, cosmosCfg.NodeAddr, cosmosCfg.ChainID, cosmosCfg.Keyring, cosmosCfg.From)
 
 	counter := 0
-	aggr := Aggregator{data:""}
+	aggr := Aggregator{data: ""}
 	prf := ZKProof{}
-	lst := make([]map[string]string, 0)
+	proof_list := []string{}
 
 	fnAgg := func(msg [][]byte) bool {
 		log.Println("Aggregating message: ", string(msg[0]), string(msg[1]))
 		aggr.Aggregate(msg[1])
-		m := map[string]string{"length": string(len(msg[1])), "data": string(msg[1])}
-		lst = append(lst, m)
+		proof_list = append(proof_list, string(msg[1]))
 		return true
 	}
 
@@ -112,101 +99,47 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return hash, err
 	}
 
-	fnCosmos := func(btcHash string, root string, leaves string) []byte {
-
-		status, message := CallContractStoreMerkleTree(btcHash, root, leaves)
-		return []byte(message)
-
-		if status {
-		}
-		payload := map[string]string{
-			"recipient": "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d",
-			"memo":      btcHash,
-		}
-
-
-		// Convert payload to JSON
-		jsonPayload, err := json.Marshal(payload)
-		if err != nil {
-			log.Fatalf("Failed to marshal JSON: %v", err)
-			return nil
-		}
-
-		// Create HTTP client
-		httpClient := &http.Client{
-			Timeout: 10 * time.Second,
-		}
-
-		// API endpoint
-		apiURL := "https://cosmos-api-hcf6.onrender.com/send-tokens"
-
-		// Create HTTP request
-		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			log.Fatalf("Failed to create request to Cosmos: %v", err)
-			return nil
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		// Send the request
-		resp, err := httpClient.Do(req)
-		if err != nil {
-			log.Fatalf("Failed to send data to Cosmos: %v", err)
-			return nil
-		}
-		defer resp.Body.Close()
-
-		// Read response body
-		out, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatalf("Failed to read Cosmos API response: %v", err)
-			return nil
-		}
-		fmt.Print(1)
-		// Check response status
-		if resp.StatusCode != http.StatusOK {
-			log.Print("Cosmos API returned non-OK status: %d", resp.StatusCode)
-			return nil
-		}
-		log.Print("Successfully sent data: %v", resp)
-		// fmt.Print(out)
-		return out
-	}
-
 	fnWrite := func() {
 		// Generate and process proof
-		merkel_root := prf.GenerateAggregatedProof(aggr.data)
+		merkle_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
-		log.Println("Aggregated Proof: ", merkel_root)
-		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
-		out := fnCosmos(string(hash), merkel_root, aggr.data)
+		log.Println("Aggregated Proof: ", merkle_root)
 		aggr.data = ""
-		dat := map[string]interface{}{}
-		// if err := json.Unmarshal(out, &dat); err != nil {
-		// 	panic(err)
-		// }
-		dat["proofs"] = lst
-		lst = make([]map[string]string, 0)
-
-		// hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkel_root)})
+		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkle_root)})
 
 		if err != nil {
 			log.Println("Error writing -> ", err, "; out:", string(hash))
 			return
 		}
 		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
-		dat["btc_tx_hash"] = strings.ReplaceAll(string(hash[:]), "\n", "")
-		out, err = json.Marshal(dat)
-		log.Print("Sending proof info to mongo:", string(out))
-		// Send data to Mongo
-		err = mongoc.SendData(out)
+
+		out, err := clients.SendCosmosTXWithData(string(merkle_root), "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d")
 		if err != nil {
-			log.Fatalf("Failed to send data to Mongo: %v", err)
+			log.Fatalf("%v", err)
 			return
 		}
-		// if !btcReader.Process(fnBtc, [][]byte{nil, prf[:]}) {
-		// 	log.Println("Failed to write proof")
-		// }
+
+		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
+		cosmos_resp := clients.CosmosTxData{}
+
+		err = json.Unmarshal(out, &cosmos_resp)
+		if err != nil {
+			log.Fatalf("Failed to parse cosmos response: %v", err)
+			return
+		}
+
+		aggProof, err := models.CreateAggregatedProof(
+			merkle_root,
+			proof_list,
+			btc_tx_hash,
+			cosmos_resp,
+		)
+		proof_list = make([]string, 0)
+		if err != nil {
+			log.Fatalf("Failed to store Aggregated Proof in DB: %v", err)
+		}
+
+		log.Println("Stored Aggregated Proof: %v", aggProof)
 	}
 
 	// Listen for messages
@@ -218,7 +151,13 @@ func HashBlockSubscriber(cfg *config.Config) {
 			if !dataReader.Validate(ok, msg) {
 				continue
 			}
-			dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}
+			// Add error handling for SendChan operation
+			select {
+			case dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}:
+				// Message sent successfully
+			default:
+				log.Println("Warning: Could not send response message - channel full or closed")
+			}
 			counter++
 			dataReader.Process(fnAgg, msg)
 			// Write to Bitcoin
