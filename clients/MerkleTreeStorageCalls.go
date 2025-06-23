@@ -1,0 +1,111 @@
+package clients
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"fmt"
+	"log"
+	"math/big"
+	"strings"
+
+	"github.com/Layer-Edge/bitcoin-da/config"
+	"github.com/Layer-Edge/bitcoin-da/contracts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+)
+
+func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) error {
+	layerEdgeClient, err := ethclient.Dial(cfg.LayerEdgeRPC.HTTP)
+	if err != nil {
+		return fmt.Errorf("error creating layerEdgeClient: %v", err)
+	}
+
+	// Your private key
+	privateKeyStr := cfg.LayerEdgeRPC.PrivateKey
+	// Remove 0x prefix if present, as crypto.HexToECDSA expects hex without prefix
+	if strings.HasPrefix(privateKeyStr, "0x") {
+		privateKeyStr = privateKeyStr[2:]
+	}
+	privateKey, err := crypto.HexToECDSA(privateKeyStr)
+	if err != nil {
+		return fmt.Errorf("Error parsing private key: %v", err)
+	}
+
+	// Get public address
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+	}
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
+	// Get nonce
+	nonce, err := layerEdgeClient.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	// Set gas price
+	gasPrice, err := layerEdgeClient.SuggestGasPrice(context.Background())
+	if err != nil {
+		return err
+	}
+
+	// Create transactor
+	chainID := big.NewInt(cfg.LayerEdgeRPC.ChainID)
+	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		return err
+	}
+	auth.Nonce = big.NewInt(int64(nonce))
+	auth.Value = big.NewInt(0)      // in wei
+	auth.GasLimit = uint64(3000000) // gas limit
+	auth.GasPrice = gasPrice
+
+	contractAddress := common.HexToAddress(cfg.LayerEdgeRPC.MerkleTreeStorageContract)
+	merkleTreeStorageContract, err := contracts.NewMerkleTreeStorage(contractAddress, layerEdgeClient)
+	if err != nil {
+		return fmt.Errorf("error creating merkleTreeStorageContract: %v", err)
+	}
+
+	// Parse merkle root string into [32]byte
+	// Expected format: "0xhash" or "hash" (will add 0x prefix if not present)
+	merkleRootStr := strings.TrimSpace(merkle_root)
+	if !strings.HasPrefix(merkleRootStr, "0x") {
+		merkleRootStr = "0x" + merkleRootStr
+	}
+	merkleRootHash := common.HexToHash(merkleRootStr)
+
+	// Parse leaves string into array of hashes
+	// Expected format: "0xhash1,0xhash2,0xhash3" or "hash1,hash2,hash3"
+	leafStrings := strings.Split(leaves, ",")
+	var leafHashes [][32]byte
+
+	for _, leafStr := range leafStrings {
+		leafStr = strings.TrimSpace(leafStr)
+		if leafStr == "" {
+			continue
+		}
+
+		// Add 0x prefix if not present
+		if !strings.HasPrefix(leafStr, "0x") {
+			leafStr = "0x" + leafStr
+		}
+
+		// Convert to hash
+		leafHash := common.HexToHash(leafStr)
+		leafHashes = append(leafHashes, leafHash)
+	}
+
+	// Call a write function (e.g., addLeaf)
+	tx, err := merkleTreeStorageContract.StoreTree(auth, merkleRootHash, leafHashes)
+	if err != nil {
+		return fmt.Errorf("error in store merkle tree contract call: %v", err)
+	}
+
+	log.Println("Transaction sent:", tx.Hash().Hex())
+
+	return nil
+}

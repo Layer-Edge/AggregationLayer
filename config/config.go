@@ -28,8 +28,11 @@ type Config struct {
 	WriteIntervalBlock int `yaml:"write-interval-blocks"`
 
 	LayerEdgeRPC struct {
-		HTTP string `yaml:"http"`
-		WSS  string `yaml:"wss"`
+		ChainID                   int64  `yaml:"chain-id"`
+		HTTP                      string `yaml:"http"`
+		WSS                       string `yaml:"wss"`
+		MerkleTreeStorageContract string `yaml:"merkle-tree-storage-contract"`
+		PrivateKey                string `yaml:"private-key"`
 	} `yaml:"layer-edge-rpc"`
 
 	Cosmos struct {
@@ -79,39 +82,51 @@ func validateConfig(cfg *Config) {
 		log.Fatal("Protocol Id is required in config file")
 	}
 
-	if cfg.BtcCliPath == "" {
-		log.Fatal("Bitcoin CLI Path not given")
+	// if cfg.BtcCliPath == "" {
+	// 	log.Fatal("Bitcoin CLI Path not given")
+	// }
+
+	// if cfg.BashScriptPath == "" {
+	// 	log.Fatal("Bash Script Path not given")
+	// }
+
+	// if cfg.PostgresConnectionURI == "" {
+	// 	log.Fatal("Postgres Connection URI is required in config file")
+	// }
+	// if cfg.Auth == "" {
+	// 	log.Fatal("BTC Auth is not given")
+	// }
+
+	// if cfg.Cosmos.ChainID == "" {
+	// 	log.Fatal("Cosmos ChainID is required")
+	// }
+
+	// if cfg.Cosmos.RpcEndpoint == "" {
+	// 	log.Fatal("Cosmos RpcEndpoint is required")
+	// }
+
+	// if cfg.Cosmos.KeyringBackend == "" {
+	// 	log.Fatal("Cosmos KeyringBackend is required")
+	// }
+
+	// if cfg.Cosmos.KeyName == "" {
+	// 	log.Fatal("Cosmos KeyName is required")
+	// }
+
+	// if cfg.Cosmos.MerkleTreeStorageContract == "" {
+	// 	log.Fatal("Cosmos MerkleTreeStorageContract is required")
+	// }
+
+	if cfg.LayerEdgeRPC.HTTP == "" {
+		log.Fatal("LayerEdgeRPC URL is required")
 	}
 
-	if cfg.BashScriptPath == "" {
-		log.Fatal("Bash Script Path not given")
+	if cfg.LayerEdgeRPC.PrivateKey == "" {
+		log.Fatal("LayerEdgeRPC PrivateKey is required")
 	}
 
-	if cfg.PostgresConnectionURI == "" {
-		log.Fatal("Postgres Connection URI is required in config file")
-	}
-	if cfg.Auth == "" {
-		log.Fatal("BTC Auth is not given")
-	}
-
-	if cfg.Cosmos.ChainID == "" {
-		log.Fatal("Cosmos ChainID is required")
-	}
-
-	if cfg.Cosmos.RpcEndpoint == "" {
-		log.Fatal("Cosmos RpcEndpoint is required")
-	}
-
-	if cfg.Cosmos.KeyringBackend == "" {
-		log.Fatal("Cosmos KeyringBackend is required")
-	}
-
-	if cfg.Cosmos.KeyName == "" {
-		log.Fatal("Cosmos KeyName is required")
-	}
-
-	if cfg.Cosmos.MerkleTreeStorageContract == "" {
-		log.Fatal("Cosmos MerkleTreeStorageContract is required")
+	if cfg.LayerEdgeRPC.MerkleTreeStorageContract == "" {
+		log.Fatal("LayerEdgeRPC MerkleTreeStorageContract is required")
 	}
 
 	if cfg.WriteIntervalBlock == 0 {
