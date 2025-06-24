@@ -30,7 +30,7 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) erro
 	}
 	privateKey, err := crypto.HexToECDSA(privateKeyStr)
 	if err != nil {
-		return fmt.Errorf("Error parsing private key: %v", err)
+		return fmt.Errorf("error parsing private key: %v", err)
 	}
 
 	// Get public address

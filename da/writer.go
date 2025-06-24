@@ -139,7 +139,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			log.Println("Error parsing merkle tree leaves  -> ", err, "; out:", string(hash))
 			return
 		}
-		err = CallContractStoreMerkleTree(cfg, strings.ReplaceAll(string(hash[:]), "\n", ""), merkle_root, string(leaves))
+		err = clients.StoreMerkleTree(cfg, merkle_root, string(leaves))
 		if err != nil {
 			log.Println("Error storing merkle  -> ", err, "; out:", string(hash))
 			return
