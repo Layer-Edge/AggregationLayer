@@ -117,15 +117,17 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) (*Tx
 		return nil, fmt.Errorf("error in store merkle tree contract call: %v", err)
 	}
 
-	receipt, err := layerEdgeClient.TransactionReceipt(context.Background(), tx.Hash())
+	log.Println("Transaction sent:", tx.Hash().Hex())
+	log.Println("Waiting for transaction to be mined...")
+
+	// Wait for transaction to be mined
+	receipt, err := bind.WaitMined(context.Background(), layerEdgeClient, tx)
 	if err != nil {
-		return nil, fmt.Errorf("error in getting transaction receipt: %v", err)
+		return nil, fmt.Errorf("error waiting for transaction to be mined: %v", err)
 	}
 
-	log.Println("Transaction sent:", tx.Hash().Hex())
-
 	return &TxData{
-		Success:         true,
+		Success:         receipt.Status == 1,
 		From:            fromAddress.Hex(),
 		To:              cfg.LayerEdgeRPC.MerkleTreeStorageContract,
 		Amount:          "0",
