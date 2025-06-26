@@ -31,7 +31,7 @@ type AggregatedProof struct {
 	UpdatedAt       time.Time `bun:"updated_at,auto_update"`
 }
 
-func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash string, data clients.CosmosTxData) (sql.Result, error) {
+func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash string, data clients.TxData) (sql.Result, error) {
 	block_height, err := strconv.ParseInt(data.BlockHeight, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("Error converting block height ", err)

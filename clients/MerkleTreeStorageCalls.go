@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/Layer-Edge/bitcoin-da/config"
@@ -16,10 +17,21 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) error {
+type TxData struct {
+	Success         bool   `json:"success"`
+	From            string `json:"from"`
+	To              string `json:"to"`
+	Amount          string `json:"amount"`
+	TransactionHash string `json:"transactionHash"`
+	Memo            string `json:"memo"`
+	BlockHeight     string `json:"blockHeight"` // can use int64 if you want to parse it directly
+	GasUsed         string `json:"gasUsed"`     // same here
+}
+
+func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) (*TxData, error) {
 	layerEdgeClient, err := ethclient.Dial(cfg.LayerEdgeRPC.HTTP)
 	if err != nil {
-		return fmt.Errorf("error creating layerEdgeClient: %v", err)
+		return nil, fmt.Errorf("error creating layerEdgeClient: %v", err)
 	}
 
 	// Your private key
@@ -30,34 +42,34 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) erro
 	}
 	privateKey, err := crypto.HexToECDSA(privateKeyStr)
 	if err != nil {
-		return fmt.Errorf("error parsing private key: %v", err)
+		return nil, fmt.Errorf("error parsing private key: %v", err)
 	}
 
 	// Get public address
 	publicKey := privateKey.Public()
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
 	if !ok {
-		return fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+		return nil, fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
 	}
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 
 	// Get nonce
 	nonce, err := layerEdgeClient.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("error getting nonce: %v", err)
 	}
 
 	// Set gas price
 	gasPrice, err := layerEdgeClient.SuggestGasPrice(context.Background())
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("error getting gas price: %v", err)
 	}
 
 	// Create transactor
 	chainID := big.NewInt(cfg.LayerEdgeRPC.ChainID)
 	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("error creating transactor: %v", err)
 	}
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0)      // in wei
@@ -67,7 +79,7 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) erro
 	contractAddress := common.HexToAddress(cfg.LayerEdgeRPC.MerkleTreeStorageContract)
 	merkleTreeStorageContract, err := contracts.NewMerkleTreeStorage(contractAddress, layerEdgeClient)
 	if err != nil {
-		return fmt.Errorf("error creating merkleTreeStorageContract: %v", err)
+		return nil, fmt.Errorf("error creating merkleTreeStorageContract: %v", err)
 	}
 
 	// Parse merkle root string into [32]byte
@@ -102,10 +114,24 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) erro
 	// Call a write function (e.g., addLeaf)
 	tx, err := merkleTreeStorageContract.StoreTree(auth, merkleRootHash, leafHashes)
 	if err != nil {
-		return fmt.Errorf("error in store merkle tree contract call: %v", err)
+		return nil, fmt.Errorf("error in store merkle tree contract call: %v", err)
+	}
+
+	receipt, err := layerEdgeClient.TransactionReceipt(context.Background(), tx.Hash())
+	if err != nil {
+		return nil, fmt.Errorf("error in getting transaction receipt: %v", err)
 	}
 
 	log.Println("Transaction sent:", tx.Hash().Hex())
 
-	return nil
+	return &TxData{
+		Success:         true,
+		From:            fromAddress.Hex(),
+		To:              cfg.LayerEdgeRPC.MerkleTreeStorageContract,
+		Amount:          "0",
+		TransactionHash: tx.Hash().Hex(),
+		Memo:            "",
+		BlockHeight:     receipt.BlockNumber.String(),
+		GasUsed:         strconv.FormatUint(receipt.GasUsed, 10),
+	}, nil
 }

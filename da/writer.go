@@ -139,7 +139,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			log.Println("Error parsing merkle tree leaves  -> ", err, "; out:", string(hash))
 			return
 		}
-		err = clients.StoreMerkleTree(cfg, merkle_root, string(leaves))
+		txData, err := clients.StoreMerkleTree(cfg, merkle_root, string(leaves))
 		if err != nil {
 			log.Println("Error storing merkle  -> ", err, "; out:", string(hash))
 			return
@@ -147,26 +147,13 @@ func HashBlockSubscriber(cfg *config.Config) {
 
 		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
 
-		out, err := clients.SendCosmosTXWithData(string(merkle_root), "cosmos1c3y4q50cdyaa5mpfaa2k8rx33ydywl35hsvh0d")
-		if err != nil {
-			log.Fatalf("%v", err)
-			return
-		}
-
 		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
-		cosmos_resp := clients.CosmosTxData{}
-
-		err = json.Unmarshal(out, &cosmos_resp)
-		if err != nil {
-			log.Fatalf("Failed to parse cosmos response: %v", err)
-			return
-		}
 
 		aggProof, err := models.CreateAggregatedProof(
 			merkle_root,
 			proof_list,
 			btc_tx_hash,
-			cosmos_resp,
+			*txData,
 		)
 		proof_list = make([]string, 0)
 		if err != nil {
