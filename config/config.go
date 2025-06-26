@@ -48,6 +48,8 @@ type Config struct {
 		MerkleTreeStorageContract string `yaml:"merkleTreeStorageContract"`
 	} `yaml:"cosmos"`
 
+	MerkleTreeGeneratorServer string `yaml:"merkle-tree-generator-server"`
+
 	PostgresConnectionURI string `yaml:"postgres-connection-uri"`
 }
 
@@ -93,6 +95,11 @@ func validateConfig(cfg *Config) {
 	if cfg.PostgresConnectionURI == "" {
 		log.Fatal("Postgres Connection URI is required in config file")
 	}
+
+	if cfg.MerkleTreeGeneratorServer == "" {
+		log.Fatal("Merkle Tree Generator Server is required")
+	}
+
 	if cfg.Auth == "" {
 		log.Fatal("BTC Auth is not given")
 	}

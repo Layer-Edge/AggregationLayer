@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/Layer-Edge/bitcoin-da/config"
 )
 
-const (
-	serverEndpoint = "http://35.239.104.101:8080"
-)
+var cfg = config.GetConfig()
 
 type ProcessRequest struct {
 	Operation    string      `json:"operation"`
@@ -44,7 +44,7 @@ func GetMerkleRoot(input string) (string, error) {
 
 	// Make POST request
 	resp, err := http.Post(
-		serverEndpoint+"/process",
+		cfg.MerkleTreeGeneratorServer+"/process",
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
