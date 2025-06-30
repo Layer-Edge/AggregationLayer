@@ -8,7 +8,7 @@ zmq-endpoint-data-block: "tcp://0.0.0.0:40006"
 # Writer Only  -----
 enable-writer: true # run writer service
 
-write-interval-blocks: 10 # Configure write op. frequency
+write-interval-blocks: 64 # Configure write op. frequency
 
 layer-edge-rpc:
   http: "https://testnet-rpc.layeredge.io/" 

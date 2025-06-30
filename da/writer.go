@@ -14,7 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
+	"time"
 	"github.com/Layer-Edge/bitcoin-da/clients"
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/models"
@@ -107,6 +107,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 	aggr := Aggregator{data: ""}
 	prf := ZKProof{}
 	proof_list := []string{}
+	last_write := time.Now().Unix()
 
 	fnAgg := func(msg [][]byte) bool {
 		log.Println("Aggregating message: ", string(msg[0]), string(msg[1]))
@@ -181,9 +182,11 @@ func HashBlockSubscriber(cfg *config.Config) {
 			}
 			counter++
 			dataReader.Process(fnAgg, msg)
-			// Write to Bitcoin
-			if (counter % cfg.WriteIntervalBlock) == 0 {
+			// Write to LayerEdge chain
+			now := time.Now().Unix()
+			if (counter % cfg.WriteIntervalBlock) == 0 || now - last_write > int64(cfg.WriteIntervalSeconds) {
 				fnWrite()
+				last_write = now
 			}
 		case msg, ok := <-btcReader.channeler.RecvChan:
 			log.Println("Received btc block")

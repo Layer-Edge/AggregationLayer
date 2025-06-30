@@ -26,6 +26,7 @@ type Config struct {
 	EnableWriter bool `yaml:"enable-writer"`
 
 	WriteIntervalBlock int `yaml:"write-interval-blocks"`
+	WriteIntervalSeconds int `yaml:"write-interval-seconds"`
 
 	LayerEdgeRPC struct {
 		ChainID                   int64  `yaml:"chain-id"`
@@ -138,6 +139,10 @@ func validateConfig(cfg *Config) {
 
 	if cfg.WriteIntervalBlock == 0 {
 		cfg.WriteIntervalBlock = 1 // defaults to 1
+	}
+
+	if cfg.WriteIntervalSeconds == 0 {
+		cfg.WriteIntervalSeconds = 600 // defaults to 10 min
 	}
 }
 
