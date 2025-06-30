@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
 	"github.com/Layer-Edge/bitcoin-da/clients"
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/models"
@@ -127,7 +128,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 		merkle_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
 		log.Println("Aggregated Proof: ", merkle_root)
-		aggr.data = ""
 		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkle_root)})
 
 		if err != nil {
@@ -141,6 +141,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			return
 		}
 		txData, err := clients.StoreMerkleTree(cfg, merkle_root, string(leaves))
+		aggr.data = ""
 		if err != nil {
 			log.Println("Error storing merkle  -> ", err, "; out:", string(hash))
 			return
@@ -184,7 +185,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			dataReader.Process(fnAgg, msg)
 			// Write to LayerEdge chain
 			now := time.Now().Unix()
-			if (counter % cfg.WriteIntervalBlock) == 0 || now - last_write > int64(cfg.WriteIntervalSeconds) {
+			if (counter%cfg.WriteIntervalBlock) == 0 || now-last_write > int64(cfg.WriteIntervalSeconds) {
 				fnWrite()
 				last_write = now
 			}
