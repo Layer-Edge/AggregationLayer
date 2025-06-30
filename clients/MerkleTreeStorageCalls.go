@@ -91,7 +91,7 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) (*Tx
 	merkleRootHash := common.HexToHash(merkleRootStr)
 
 	// Parse leaves string into array of hashes
-	// Expected format: "0xhash1,0xhash2,0xhash3" or "hash1,hash2,hash3"
+	// Store exact data received for leaves without modifications
 	leafStrings := strings.Split(leaves, ",")
 	var leafHashes [][32]byte
 
@@ -101,12 +101,7 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) (*Tx
 			continue
 		}
 
-		// Add 0x prefix if not present
-		if !strings.HasPrefix(leafStr, "0x") {
-			leafStr = "0x" + leafStr
-		}
-
-		// Convert to hash
+		// Convert to hash exactly as received (with or without 0x prefix)
 		leafHash := common.HexToHash(leafStr)
 		leafHashes = append(leafHashes, leafHash)
 	}
