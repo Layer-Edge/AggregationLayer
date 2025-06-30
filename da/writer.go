@@ -8,7 +8,6 @@ import (
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
 
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -135,12 +134,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			return
 		}
 
-		leaves, err := json.Marshal(strings.Split(aggr.data, ","))
-		if err != nil {
-			log.Println("Error parsing merkle tree leaves  -> ", err, "; out:", string(hash))
-			return
-		}
-		txData, err := clients.StoreMerkleTree(cfg, merkle_root, string(leaves))
+		txData, err := clients.StoreMerkleTree(cfg, merkle_root, aggr.data)
 		aggr.data = ""
 		if err != nil {
 			log.Println("Error storing merkle  -> ", err, "; out:", string(hash))
