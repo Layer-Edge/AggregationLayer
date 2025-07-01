@@ -28,7 +28,7 @@ type TxData struct {
 	GasUsed         string `json:"gasUsed"`     // same here
 }
 
-func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) (*TxData, error) {
+func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*TxData, error) {
 	layerEdgeClient, err := ethclient.Dial(cfg.LayerEdgeRPC.HTTP)
 	if err != nil {
 		return nil, fmt.Errorf("error creating layerEdgeClient: %v", err)
@@ -90,20 +90,18 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves string) (*Tx
 	}
 	merkleRootHash := common.HexToHash(merkleRootStr)
 
-	// Parse leaves string into array of hashes
-	// Store exact data received for leaves without modifications
-	leafStrings := strings.Split(leaves, ",")
-	var leafHashes [][32]byte
+	// Parse leaves string into array of bytes
+	// Expected format: plain strings that will be converted to bytes
+	var leafHashes [][]byte
 
-	for _, leafStr := range leafStrings {
+	for _, leafStr := range leaves {
 		leafStr = strings.TrimSpace(leafStr)
 		if leafStr == "" {
 			continue
 		}
 
-		// Convert to hash exactly as received (with or without 0x prefix)
-		leafHash := common.HexToHash(leafStr)
-		leafHashes = append(leafHashes, leafHash)
+		// Convert plain string to bytes
+		leafHashes = append(leafHashes, []byte(leafStr))
 	}
 
 	// Call a write function (e.g., addLeaf)

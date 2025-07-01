@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
+	// "github.com/ethereum/go-ethereum/accounts/abi"
 
 	"encoding/hex"
 	"fmt"
@@ -127,6 +128,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 		merkle_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
 		log.Println("Aggregated Proof: ", merkle_root)
+		aggr.data = ""
 		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkle_root)})
 
 		if err != nil {
@@ -134,8 +136,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			return
 		}
 
-		txData, err := clients.StoreMerkleTree(cfg, merkle_root, aggr.data)
-		aggr.data = ""
+		txData, err := clients.StoreMerkleTree(cfg, merkle_root, proof_list)
 		if err != nil {
 			log.Println("Error storing merkle  -> ", err, "; out:", string(hash))
 			return
