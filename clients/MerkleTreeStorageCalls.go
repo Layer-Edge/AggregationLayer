@@ -72,8 +72,8 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 		return nil, fmt.Errorf("error creating transactor: %v", err)
 	}
 	auth.Nonce = big.NewInt(int64(nonce))
-	auth.Value = big.NewInt(0)      // in wei
-	auth.GasLimit = uint64(3000000) // gas limit
+	auth.Value = big.NewInt(0)       // in wei
+	auth.GasLimit = uint64(10000000) // gas limit
 	auth.GasPrice = gasPrice
 
 	contractAddress := common.HexToAddress(cfg.LayerEdgeRPC.MerkleTreeStorageContract)
