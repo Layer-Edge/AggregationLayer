@@ -12,6 +12,7 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/contracts"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -107,7 +108,10 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 
 	// Prepare call data for gas estimation
 	// Use the ABI from the contracts package
-	storeTreeABI := contracts.MerkleTreeStorageABI
+	storeTreeABI, err := abi.JSON(strings.NewReader(contracts.MerkleTreeStorageABI))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing ABI: %v", err)
+	}
 	storeTreeData, err := storeTreeABI.Pack("storeTree", merkleRootHash, leafHashes)
 	if err != nil {
 		return nil, fmt.Errorf("error packing storeTree data for gas estimation: %v", err)
