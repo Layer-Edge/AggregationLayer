@@ -11,6 +11,7 @@ import (
 
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/contracts"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -103,6 +104,30 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 		// Convert plain string to bytes
 		leafHashes = append(leafHashes, []byte(leafStr))
 	}
+
+	// Prepare call data for gas estimation
+	// Use the ABI from the contracts package
+	storeTreeABI := contracts.MerkleTreeStorageABI
+	storeTreeData, err := storeTreeABI.Pack("storeTree", merkleRootHash, leafHashes)
+	if err != nil {
+		return nil, fmt.Errorf("error packing storeTree data for gas estimation: %v", err)
+	}
+
+	callMsg := ethereum.CallMsg{
+		From:     fromAddress,
+		To:       &contractAddress,
+		Gas:      0,
+		GasPrice: gasPrice,
+		Value:    big.NewInt(0),
+		Data:     storeTreeData,
+	}
+
+	estimatedGas, err := layerEdgeClient.EstimateGas(context.Background(), callMsg)
+	if err != nil {
+		return nil, fmt.Errorf("error estimating gas: %v", err)
+	}
+
+	auth.GasLimit = estimatedGas + 10000 // gas limit with buffer
 
 	// Call a write function (e.g., addLeaf)
 	tx, err := merkleTreeStorageContract.StoreTree(auth, merkleRootHash, leafHashes)
