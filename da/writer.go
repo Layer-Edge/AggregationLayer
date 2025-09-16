@@ -13,7 +13,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/Layer-Edge/bitcoin-da/clients"
@@ -75,12 +74,12 @@ func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client
 func HashBlockSubscriber(cfg *config.Config) {
 	// Init varaibles
 	btcReader := BlockSubscriber{channeler: nil}
-	if btcReader.Subscribe(cfg.ZmqEndpointHashBlock, "hashblock") == false {
+	if !btcReader.Subscribe(cfg.ZmqEndpointHashBlock, "hashblock") {
 		return
 	}
 
 	dataReader := BlockSubscriber{channeler: nil}
-	if dataReader.Replier(cfg.ZmqEndpointDataBlock) == false {
+	if !dataReader.Replier(cfg.ZmqEndpointDataBlock) {
 		return
 	}
 
@@ -97,13 +96,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 	defer btcReader.Reset()
 	defer dataReader.Reset()
 
-	layerEdgeClient, err := ethclient.Dial(cfg.LayerEdgeRPC.HTTP)
-	if err != nil {
-		log.Fatal("Error creating layerEdgeClient: ", err)
-	}
-
-	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth)
-
 	counter := 0
 	aggr := Aggregator{data: ""}
 	prf := ZKProof{}
@@ -117,39 +109,23 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return true
 	}
 
-	fnBtc := func(msg [][]byte) ([]byte, error) {
-		// Process
-		hash, err := ProcessMsg(msg[1], cfg.ProtocolId, layerEdgeClient)
-		return hash, err
-	}
-
 	fnWrite := func() {
 		// Generate and process proof
 		merkle_root := prf.GenerateAggregatedProof(aggr.data)
 		log.Println("Aggregated Data: ", aggr.data)
 		log.Println("Aggregated Proof: ", merkle_root)
 		aggr.data = ""
-		hash, err := btcReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkle_root)})
-
-		if err != nil {
-			log.Println("Error writing -> ", err, "; out:", string(hash))
-			return
-		}
 
 		txData, err := clients.StoreMerkleTree(cfg, merkle_root, proof_list)
 		if err != nil {
-			log.Println("Error storing merkle  -> ", err, "; out:", string(hash))
+			log.Println("Error storing merkle  -> ", err)
 			return
 		}
-
-		log.Println("received btc_tx_hash: ", strings.ReplaceAll(string(hash[:]), "\n", ""))
-
-		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
 
 		aggProof, err := models.CreateAggregatedProof(
 			merkle_root,
 			proof_list,
-			btc_tx_hash,
+			txData.TransactionHash,
 			*txData,
 		)
 		proof_list = make([]string, 0)
@@ -157,7 +133,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			log.Fatalf("Failed to store Aggregated Proof in DB: %v", err)
 		}
 
-		log.Println("Stored Aggregated Proof: %v", aggProof)
+		log.Printf("Stored Aggregated Proof: %v", aggProof)
 	}
 
 	// Listen for messages
