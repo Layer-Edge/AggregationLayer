@@ -152,7 +152,7 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 	}
 
 	TransactionFee := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), receipt.EffectiveGasPrice)
-	TransactionFee18Decimals := utils.To18Decimals(TransactionFee)
+	TransactionFee18Decimals := utils.FormatAmount(TransactionFee, 18, 18)
 
 	EdgenPrice := GetPrice(cfg, "EDGEN")
 
