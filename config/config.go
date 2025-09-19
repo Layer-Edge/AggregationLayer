@@ -25,7 +25,7 @@ type Config struct {
 
 	EnableWriter bool `yaml:"enable-writer"`
 
-	WriteIntervalBlock int `yaml:"write-interval-blocks"`
+	WriteIntervalBlock   int `yaml:"write-interval-blocks"`
 	WriteIntervalSeconds int `yaml:"write-interval-seconds"`
 
 	LayerEdgeRPC struct {
@@ -52,6 +52,8 @@ type Config struct {
 	MerkleTreeGeneratorServer string `yaml:"merkle-tree-generator-server"`
 
 	PostgresConnectionURI string `yaml:"postgres-connection-uri"`
+
+	CMCAPIKey string `yaml:"cmc-api-key"`
 }
 
 // Define a command-line flag
@@ -135,6 +137,10 @@ func validateConfig(cfg *Config) {
 
 	if cfg.LayerEdgeRPC.MerkleTreeStorageContract == "" {
 		log.Fatal("LayerEdgeRPC MerkleTreeStorageContract is required")
+	}
+
+	if cfg.CMCAPIKey == "" {
+		log.Fatal("CMCAPIKey is required")
 	}
 
 	if cfg.WriteIntervalBlock == 0 {

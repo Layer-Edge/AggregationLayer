@@ -11,6 +11,7 @@ import (
 
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/contracts"
+	"github.com/Layer-Edge/bitcoin-da/utils"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -25,6 +26,8 @@ type TxData struct {
 	To              string `json:"to"`
 	Amount          string `json:"amount"`
 	TransactionHash string `json:"transactionHash"`
+	TransactionFee  string `json:"transactionFee"`
+	EdgenPrice      string `json:"edgenPrice"`
 	Memo            string `json:"memo"`
 	BlockHeight     string `json:"blockHeight"` // can use int64 if you want to parse it directly
 	GasUsed         string `json:"gasUsed"`     // same here
@@ -148,12 +151,19 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 		return nil, fmt.Errorf("error waiting for transaction to be mined: %v", err)
 	}
 
+	TransactionFee := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), receipt.EffectiveGasPrice)
+	TransactionFee18Decimals := utils.To18Decimals(TransactionFee)
+
+	EdgenPrice := GetPrice(cfg, "EDGEN")
+
 	return &TxData{
 		Success:         receipt.Status == 1,
 		From:            fromAddress.Hex(),
 		To:              cfg.LayerEdgeRPC.MerkleTreeStorageContract,
-		Amount:          "0",
+		Amount:          fmt.Sprintf("%f", EdgenPrice*TransactionFee18Decimals),
 		TransactionHash: tx.Hash().Hex(),
+		TransactionFee:  fmt.Sprintf("%f", TransactionFee18Decimals),
+		EdgenPrice:      fmt.Sprintf("%f", EdgenPrice),
 		Memo:            "",
 		BlockHeight:     receipt.BlockNumber.String(),
 		GasUsed:         strconv.FormatUint(receipt.GasUsed, 10),

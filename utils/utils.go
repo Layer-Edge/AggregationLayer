@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/hex"
 	"fmt"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -94,13 +95,23 @@ func PayToTaprootScript(taprootKey *btcec.PublicKey) ([]byte, error) {
 
 func ExtractPushData(version uint16, pkScript []byte) ([]byte, error) {
 	type OpData struct {
-		opcode byte
+		opcode     byte
 		datalength byte
-		data []byte
+		data       []byte
 	}
 	result := OpData{pkScript[0], pkScript[1], pkScript[2:]}
 	if result.opcode != txscript.OP_RETURN {
 		return nil, nil
 	}
 	return result.data, nil
+}
+
+// To18Decimals converts a big.Int value to 18 decimal places (wei to ether format)
+// This is commonly used for token amounts where 1 token = 10^18 wei
+func To18Decimals(value *big.Int) float64 {
+	// 10^18
+	decimals := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	valueFloat, _ := value.Float64()
+	decimalsFloat, _ := decimals.Float64()
+	return valueFloat / decimalsFloat
 }

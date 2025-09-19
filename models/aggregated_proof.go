@@ -24,6 +24,8 @@ type AggregatedProof struct {
 	Proofs          []string  `bun:"proofs,array,type:text[],notnull,default:'{}'"`
 	To              string    `bun:"to,type:varchar(255),notnull"`
 	TransactionHash string    `bun:"transaction_hash,type:varchar(255),notnull"`
+	TransactionFee  string    `bun:"transaction_fee,type:double precision,default:0"`
+	EdgenPrice      string    `bun:"edgen_price,type:double precision,default:0"`
 	Amount          string    `bun:"amount,type:text,notnull"`
 	Success         bool      `bun:"success,notnull,default:false"`
 	Timestamp       time.Time `bun:"timestamp,notnull"`
@@ -51,6 +53,8 @@ func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash st
 		Proofs:          proof_list,
 		To:              data.To,
 		TransactionHash: data.TransactionHash,
+		TransactionFee:  data.TransactionFee,
+		EdgenPrice:      data.EdgenPrice,
 		Amount:          data.Amount,
 		Success:         data.Success,
 		Timestamp:       time.Now().UTC(),
