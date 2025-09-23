@@ -12,6 +12,9 @@ import (
 
 var cfg = config.GetConfig()
 
+type ZKProof struct {
+}
+
 type ProcessRequest struct {
 	Operation    string      `json:"operation"`
 	Data         []string    `json:"data"`
@@ -64,4 +67,19 @@ func GetMerkleRoot(input string) (string, error) {
 	}
 
 	return processResp.Root, nil
+}
+
+// MD5 sum for now
+func (prf *ZKProof) GenerateAggregatedProof(msg string) string {
+	/* struct {
+	       byte[2] length
+	       data
+	   }
+	*/
+	merkleRoot, err := GetMerkleRoot(msg)
+	if err != nil {
+		fmt.Printf("Error generating Merkle root: %v\n", err)
+		return ""
+	}
+	return merkleRoot
 }

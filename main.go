@@ -12,9 +12,5 @@ var cfg = config.GetConfig()
 // var relayer = store.GetRelayer(cfg)
 
 func main() {
-	if cfg.EnableWriter {
-		da.HashBlockSubscriber(&cfg)
-	} else {
-		da.RawBlockSubscriber(&cfg)
-	}
+	da.HashBlockSubscriber(&cfg)
 }

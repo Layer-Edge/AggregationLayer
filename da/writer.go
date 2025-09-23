@@ -11,51 +11,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
 	"time"
 
 	"github.com/Layer-Edge/bitcoin-da/clients"
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/models"
 )
-
-// To be set from Config
-var (
-	BtcCliPath     = ""
-	BashScriptPath = ""
-)
-
-func CallScriptWithData(data string) ([]byte, error) {
-	cmd := exec.Command(BashScriptPath+"/op_return_transaction.sh", data)
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "BTC_CLI_PATH="+BtcCliPath)
-	log.Println("Running BTC script", cmd)
-	out, err := cmd.Output()
-	return out, err
-}
-
-func CallContractStoreMerkleTree(cfg *config.Config, btc_tx_hash string, root string, leaves string) error {
-	contractAddr := "cosmos1ufs3tlq4umljk0qfe8k5ya0x6hpavn897u2cnf9k0en9jr7qarqqt56709"
-	jsonMsg := fmt.Sprintf(`{"store_merkle_tree":{"id":"%s","root":"%s","leaves":%s,"metadata":""}}`, btc_tx_hash, root, leaves)
-
-	cmd := exec.Command("gaiad", "tx", "wasm", "execute", contractAddr, jsonMsg,
-		"--from", cfg.Cosmos.KeyName,
-		"--keyring-backend", cfg.Cosmos.KeyringBackend,
-		"--gas", "400000",
-		"--node", cfg.Cosmos.RpcEndpoint,
-		"--chain-id", cfg.Cosmos.ChainID,
-	)
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("error while running gaiad cli: %v", err)
-	}
-	return nil
-}
 
 func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client) ([]byte, error) {
 	// layerEdgeHeader, err := layerEdgeClient.HeaderByNumber(context.Background(), nil)
@@ -73,11 +34,6 @@ func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client
 
 func HashBlockSubscriber(cfg *config.Config) {
 	// Init varaibles
-	btcReader := BlockSubscriber{channeler: nil}
-	if !btcReader.Subscribe(cfg.ZmqEndpointHashBlock, "hashblock") {
-		return
-	}
-
 	dataReader := BlockSubscriber{channeler: nil}
 	if !dataReader.Replier(cfg.ZmqEndpointDataBlock) {
 		return
@@ -90,10 +46,6 @@ func HashBlockSubscriber(cfg *config.Config) {
 		return
 	}
 
-	BashScriptPath = cfg.BashScriptPath
-	BtcCliPath = cfg.BtcCliPath
-
-	defer btcReader.Reset()
 	defer dataReader.Reset()
 
 	counter := 0
@@ -139,34 +91,25 @@ func HashBlockSubscriber(cfg *config.Config) {
 	// Listen for messages
 	fmt.Println("Listening for Data Blocks and Hash Blocks (writer)...")
 	for {
+		msg, ok := <-dataReader.channeler.RecvChan
+		log.Println("Received data for aggregation")
+		if !dataReader.Validate(ok, msg) {
+			continue
+		}
+		// Add error handling for SendChan operation
 		select {
-		case msg, ok := <-dataReader.channeler.RecvChan:
-			log.Println("Received data for aggregation")
-			if !dataReader.Validate(ok, msg) {
-				continue
-			}
-			// Add error handling for SendChan operation
-			select {
-			case dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}:
-				// Message sent successfully
-			default:
-				log.Println("Warning: Could not send response message - channel full or closed")
-			}
-			counter++
-			dataReader.Process(fnAgg, msg)
-			// Write to LayerEdge chain
-			now := time.Now().Unix()
-			if (counter%cfg.WriteIntervalBlock) == 0 || now-last_write > int64(cfg.WriteIntervalSeconds) {
-				fnWrite()
-				last_write = now
-			}
-		case msg, ok := <-btcReader.channeler.RecvChan:
-			log.Println("Received btc block")
-			if !btcReader.Validate(ok, msg) {
-				continue
-			}
-			// Write to Bitcoin
+		case dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}:
+			// Message sent successfully
+		default:
+			log.Println("Warning: Could not send response message - channel full or closed")
+		}
+		counter++
+		dataReader.Process(fnAgg, msg)
+		// Write to LayerEdge chain
+		now := time.Now().Unix()
+		if (counter%cfg.WriteIntervalBlock) == 0 || now-last_write > int64(cfg.WriteIntervalSeconds) {
 			fnWrite()
+			last_write = now
 		}
 	}
 }
