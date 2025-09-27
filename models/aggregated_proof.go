@@ -26,7 +26,7 @@ type AggregatedProof struct {
 	TransactionHash string    `bun:"transaction_hash,type:varchar(255),notnull"`
 	TransactionFee  string    `bun:"transaction_fee,type:double precision,default:0"`
 	EdgenPrice      string    `bun:"edgen_price,type:double precision,default:0"`
-	Amount          string    `bun:"amount,type:text,notnull"`
+	Amount          string    `bun:"amount,type:double precision,notnull"`
 	Success         bool      `bun:"success,notnull,default:false"`
 	Timestamp       time.Time `bun:"timestamp,notnull"`
 	CreatedAt       time.Time `bun:"created_at,auto_create"`
@@ -36,12 +36,12 @@ type AggregatedProof struct {
 func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash string, data clients.TxData) (sql.Result, error) {
 	block_height, err := strconv.ParseInt(data.BlockHeight, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("Error converting block height ", err)
+		return nil, fmt.Errorf("error converting block height: %w", err)
 	}
 
 	gas_used, err := strconv.ParseInt(data.GasUsed, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("Error converting gas used ", err)
+		return nil, fmt.Errorf("error converting gas used: %w", err)
 	}
 
 	ap := &AggregatedProof{
@@ -61,12 +61,31 @@ func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash st
 	}
 
 	log.Printf("Storing proof info to Postgres DB: %v", *ap)
-	newAggProof, err := DB.NewInsert().Model(ap).Exec(context.Background())
+
+	// Use retry mechanism for database operation
+	var newAggProof sql.Result
+	err = RetryDBOperation(func() error {
+		db, err := GetDB()
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := db.NewInsert().Model(ap).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("insert operation failed: %w", err)
+		}
+
+		newAggProof = result
+		return nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("Insert failed: %v", err)
+		return nil, fmt.Errorf("failed to create aggregated proof after retries: %w", err)
 	}
 
 	log.Println("Inserted AggregatedProof successfully")
-
 	return newAggProof, nil
 }

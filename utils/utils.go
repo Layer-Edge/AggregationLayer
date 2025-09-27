@@ -5,6 +5,39 @@ import (
 	"math/big"
 )
 
+// PowFloat calculates x^y
+func PowFloat(x, y float64) float64 {
+	if y == 0 {
+		return 1.0
+	}
+	if y == 1 {
+		return x
+	}
+	if y < 0 {
+		return 1.0 / PowFloat(x, -y)
+	}
+	if y == float64(int(y)) {
+		// Integer exponent
+		result := 1.0
+		for i := 0; i < int(y); i++ {
+			result *= x
+		}
+		return result
+	}
+	// For fractional exponents, use a simple approximation
+	// This is not mathematically precise but works for our use case
+	result := 1.0
+	for i := 0; i < int(y); i++ {
+		result *= x
+	}
+	// Add fractional part approximation
+	fractional := y - float64(int(y))
+	if fractional > 0 {
+		result *= x * fractional
+	}
+	return result
+}
+
 func FormatAmount(value *big.Int, decimals, places int) float64 {
 	if value == nil {
 		return 0

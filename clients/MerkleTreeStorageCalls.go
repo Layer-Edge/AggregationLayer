@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/contracts"
@@ -33,21 +35,136 @@ type TxData struct {
 	GasUsed         string `json:"gasUsed"`     // same here
 }
 
-func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*TxData, error) {
-	layerEdgeClient, err := ethclient.Dial(cfg.LayerEdgeRPC.HTTP)
-	if err != nil {
-		return nil, fmt.Errorf("error creating layerEdgeClient: %v", err)
+// ContractCircuitBreaker manages the circuit breaker state for contract calls
+type ContractCircuitBreaker struct {
+	mutex        sync.RWMutex
+	failureCount int
+	lastFailTime time.Time
+	circuitOpen  bool
+	timeout      time.Duration
+	maxFailures  int
+}
+
+// RetryConfig holds configuration for retry mechanisms
+type RetryConfig struct {
+	MaxRetries    int
+	BaseDelay     time.Duration
+	MaxDelay      time.Duration
+	BackoffFactor float64
+}
+
+var (
+	contractCircuitBreaker = &ContractCircuitBreaker{
+		timeout:     60 * time.Second,
+		maxFailures: 5,
 	}
+
+	retryConfig = &RetryConfig{
+		MaxRetries:    3,
+		BaseDelay:     2 * time.Second,
+		MaxDelay:      60 * time.Second,
+		BackoffFactor: 2.0,
+	}
+)
+
+// CanExecute checks if the circuit breaker allows execution
+func (cb *ContractCircuitBreaker) CanExecute() bool {
+	cb.mutex.RLock()
+	defer cb.mutex.RUnlock()
+
+	if !cb.circuitOpen {
+		return true
+	}
+
+	// Check if enough time has passed to try again
+	return time.Since(cb.lastFailTime) > cb.timeout
+}
+
+// RecordSuccess records a successful operation
+func (cb *ContractCircuitBreaker) RecordSuccess() {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	cb.failureCount = 0
+	cb.circuitOpen = false
+}
+
+// RecordFailure records a failed operation
+func (cb *ContractCircuitBreaker) RecordFailure() {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	cb.failureCount++
+	cb.lastFailTime = time.Now()
+
+	if cb.failureCount >= cb.maxFailures {
+		cb.circuitOpen = true
+		log.Printf("Contract circuit breaker opened due to %d failures", cb.failureCount)
+	}
+}
+
+// RetryContractCall executes a contract call with exponential backoff retry
+func RetryContractCall(operation func() (*TxData, error)) (*TxData, error) {
+	var lastErr error
+
+	for attempt := 0; attempt <= retryConfig.MaxRetries; attempt++ {
+		if !contractCircuitBreaker.CanExecute() {
+			return nil, fmt.Errorf("contract circuit breaker is open, operation rejected")
+		}
+
+		if attempt > 0 {
+			delay := time.Duration(float64(retryConfig.BaseDelay) *
+				utils.PowFloat(retryConfig.BackoffFactor, float64(attempt-1)))
+			if delay > retryConfig.MaxDelay {
+				delay = retryConfig.MaxDelay
+			}
+
+			log.Printf("Retrying contract call after %v delay (attempt %d/%d)",
+				delay, attempt+1, retryConfig.MaxRetries+1)
+
+			time.Sleep(delay)
+		}
+
+		result, err := operation()
+		if err == nil {
+			contractCircuitBreaker.RecordSuccess()
+			return result, nil
+		}
+
+		lastErr = err
+		contractCircuitBreaker.RecordFailure()
+		log.Printf("Contract call failed (attempt %d/%d): %v",
+			attempt+1, retryConfig.MaxRetries+1, err)
+	}
+
+	return nil, fmt.Errorf("contract call failed after %d attempts: %w", retryConfig.MaxRetries+1, lastErr)
+}
+
+func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*TxData, error) {
+	return RetryContractCall(func() (*TxData, error) {
+		return storeMerkleTreeWithRetry(cfg, merkle_root, leaves)
+	})
+}
+
+// storeMerkleTreeWithRetry performs the actual contract interaction with enhanced error handling
+func storeMerkleTreeWithRetry(cfg *config.Config, merkle_root string, leaves []string) (*TxData, error) {
+	// Create client with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	layerEdgeClient, err := ethclient.DialContext(ctx, cfg.LayerEdgeRPC.HTTP)
+	if err != nil {
+		return nil, fmt.Errorf("error creating layerEdgeClient: %w", err)
+	}
+	defer layerEdgeClient.Close()
 
 	// Your private key
 	privateKeyStr := cfg.LayerEdgeRPC.PrivateKey
 	// Remove 0x prefix if present, as crypto.HexToECDSA expects hex without prefix
-	if strings.HasPrefix(privateKeyStr, "0x") {
-		privateKeyStr = privateKeyStr[2:]
-	}
+	privateKeyStr = strings.TrimPrefix(privateKeyStr, "0x")
 	privateKey, err := crypto.HexToECDSA(privateKeyStr)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing private key: %v", err)
+		return nil, fmt.Errorf("error parsing private key: %w", err)
 	}
 
 	// Get public address
@@ -58,23 +175,27 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 	}
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 
-	// Get nonce
-	nonce, err := layerEdgeClient.PendingNonceAt(context.Background(), fromAddress)
+	// Get nonce with timeout
+	nonceCtx, nonceCancel := context.WithTimeout(ctx, 10*time.Second)
+	nonce, err := layerEdgeClient.PendingNonceAt(nonceCtx, fromAddress)
+	nonceCancel()
 	if err != nil {
-		return nil, fmt.Errorf("error getting nonce: %v", err)
+		return nil, fmt.Errorf("error getting nonce: %w", err)
 	}
 
-	// Set gas price
-	gasPrice, err := layerEdgeClient.SuggestGasPrice(context.Background())
+	// Set gas price with timeout
+	gasPriceCtx, gasPriceCancel := context.WithTimeout(ctx, 10*time.Second)
+	gasPrice, err := layerEdgeClient.SuggestGasPrice(gasPriceCtx)
+	gasPriceCancel()
 	if err != nil {
-		return nil, fmt.Errorf("error getting gas price: %v", err)
+		return nil, fmt.Errorf("error getting gas price: %w", err)
 	}
 
 	// Create transactor
 	chainID := big.NewInt(cfg.LayerEdgeRPC.ChainID)
 	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transactor: %v", err)
+		return nil, fmt.Errorf("error creating transactor: %w", err)
 	}
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0)       // in wei
@@ -84,7 +205,7 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 	contractAddress := common.HexToAddress(cfg.LayerEdgeRPC.MerkleTreeStorageContract)
 	merkleTreeStorageContract, err := contracts.NewMerkleTreeStorage(contractAddress, layerEdgeClient)
 	if err != nil {
-		return nil, fmt.Errorf("error creating merkleTreeStorageContract: %v", err)
+		return nil, fmt.Errorf("error creating merkleTreeStorageContract: %w", err)
 	}
 
 	// Parse merkle root string into [32]byte
@@ -113,11 +234,11 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 	// Use the ABI from the contracts package
 	storeTreeABI, err := abi.JSON(strings.NewReader(contracts.MerkleTreeStorageABI))
 	if err != nil {
-		return nil, fmt.Errorf("error parsing ABI: %v", err)
+		return nil, fmt.Errorf("error parsing ABI: %w", err)
 	}
 	storeTreeData, err := storeTreeABI.Pack("storeTree", merkleRootHash, leafHashes)
 	if err != nil {
-		return nil, fmt.Errorf("error packing storeTree data for gas estimation: %v", err)
+		return nil, fmt.Errorf("error packing storeTree data for gas estimation: %w", err)
 	}
 
 	callMsg := ethereum.CallMsg{
@@ -129,9 +250,12 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 		Data:     storeTreeData,
 	}
 
-	estimatedGas, err := layerEdgeClient.EstimateGas(context.Background(), callMsg)
+	// Estimate gas with timeout
+	gasEstimateCtx, gasEstimateCancel := context.WithTimeout(ctx, 15*time.Second)
+	estimatedGas, err := layerEdgeClient.EstimateGas(gasEstimateCtx, callMsg)
+	gasEstimateCancel()
 	if err != nil {
-		return nil, fmt.Errorf("error estimating gas: %v", err)
+		return nil, fmt.Errorf("error estimating gas: %w", err)
 	}
 
 	auth.GasLimit = estimatedGas + 10000 // gas limit with buffer
@@ -139,16 +263,19 @@ func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*
 	// Call a write function (e.g., addLeaf)
 	tx, err := merkleTreeStorageContract.StoreTree(auth, merkleRootHash, leafHashes)
 	if err != nil {
-		return nil, fmt.Errorf("error in store merkle tree contract call: %v", err)
+		return nil, fmt.Errorf("error in store merkle tree contract call: %w", err)
 	}
 
 	log.Println("Transaction sent:", tx.Hash().Hex())
 	log.Println("Waiting for transaction to be mined...")
 
-	// Wait for transaction to be mined
-	receipt, err := bind.WaitMined(context.Background(), layerEdgeClient, tx)
+	// Wait for transaction to be mined with timeout
+	waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer waitCancel()
+
+	receipt, err := bind.WaitMined(waitCtx, layerEdgeClient, tx)
 	if err != nil {
-		return nil, fmt.Errorf("error waiting for transaction to be mined: %v", err)
+		return nil, fmt.Errorf("error waiting for transaction to be mined: %w", err)
 	}
 
 	TransactionFee := new(big.Int).Mul(big.NewInt(int64(receipt.GasUsed)), receipt.EffectiveGasPrice)

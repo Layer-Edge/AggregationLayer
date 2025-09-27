@@ -3,14 +3,13 @@ package da
 import (
 	// "context"
 
-	"github.com/ethereum/go-ethereum/ethclient"
-
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
 	// "github.com/ethereum/go-ethereum/accounts/abi"
 
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Layer-Edge/bitcoin-da/clients"
@@ -18,21 +17,13 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/models"
 )
 
-func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client) ([]byte, error) {
-	// layerEdgeHeader, err := layerEdgeClient.HeaderByNumber(context.Background(), nil)
-	// if err != nil {
-	//     log.Println("Error getting layerEdgeHeader: ", err)
-	//     return nil, err
-	// }
-	// dhash := layerEdgeHeader.Hash()
-	// log.Println("Latest LayerEdge Block Hash:", dhash.Hex())
-
+func ProcessBTCMsg(msg []byte, protocolId string) ([]byte, error) {
 	data := append([]byte(protocolId), msg...)
 	hash := CreateOPReturnTransaction(hex.EncodeToString(data))
 	return []byte(hash), nil
 }
 
-func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
+func SuperProofSubscriber(ch chan [][]byte, cfg *config.Config) {
 	// Initialize with enhanced error handling
 	dataReader := NewBlockSubscriber()
 	defer func() {
@@ -52,12 +43,6 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 		}
 	}()
 
-	// Initialize replier with retry
-	if !dataReader.Replier(cfg.ZmqEndpointDataBlock) {
-		log.Fatal("Failed to initialize replier after retries")
-		return
-	}
-
 	counter := 0
 	aggr := Aggregator{data: ""}
 	prf := ZKProof{}
@@ -69,6 +54,12 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 		aggr.Aggregate(msg[1])
 		proof_list = append(proof_list, string(msg[1]))
 		return true
+	}
+
+	fnBtc := func(msg [][]byte) ([]byte, error) {
+		// Process
+		hash, err := ProcessBTCMsg(msg[1], cfg.ProtocolId)
+		return hash, err
 	}
 
 	fnWrite := func() {
@@ -89,6 +80,14 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 		log.Println("Aggregated Proof: ", merkle_root)
 		aggr.data = ""
 
+		hash, err := dataReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkle_root)})
+		if err != nil {
+			log.Println("Error writing -> ", err, "; out:", string(hash))
+			return
+		}
+
+		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
+
 		// Store merkle tree with retry mechanism
 		txData, err := clients.StoreMerkleTree(cfg, merkle_root, proof_list)
 		if err != nil {
@@ -101,7 +100,7 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 			aggProof, err := models.CreateAggregatedProof(
 				merkle_root,
 				proof_list,
-				txData.TransactionHash,
+				btc_tx_hash,
 				*txData,
 			)
 			proof_list = make([]string, 0)
@@ -109,7 +108,6 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 				log.Printf("Failed to store Aggregated Proof in DB: %v", err)
 				// Continue execution, don't crash
 			} else {
-				ch <- [][]byte{[]byte("datablock"), []byte(merkle_root), []byte("!!!!!")}
 				log.Printf("Stored Aggregated Proof: %v", aggProof)
 			}
 		} else {
@@ -123,27 +121,12 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 
 	for {
 		// Get message with timeout protection
-		ok, msg := dataReader.GetMessage()
-		if !ok {
-			log.Println("Failed to receive message or channel closed")
-			time.Sleep(1 * time.Second) // Brief pause before retry
-			continue
-		}
+		msg := <-ch
 
 		log.Println("Received data for aggregation")
-		if !dataReader.Validate(ok, msg) {
+		if !dataReader.Validate(true, msg) {
 			log.Println("Message validation failed, skipping")
 			continue
-		}
-
-		// Send acknowledgment with error handling
-		select {
-		case dataReader.channeler.SendChan <- [][]byte{[]byte("Data Received, will be pushed to next block")}:
-			// Message sent successfully
-		case <-time.After(5 * time.Second):
-			log.Println("Warning: Could not send response message - timeout")
-		default:
-			log.Println("Warning: Could not send response message - channel full or closed")
 		}
 
 		// Process message with error handling
@@ -155,7 +138,7 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 
 		// Write to LayerEdge chain with error handling
 		now := time.Now().Unix()
-		if (counter%cfg.WriteIntervalBlock) == 0 || now-last_write > int64(cfg.WriteIntervalSeconds) {
+		if now-last_write > int64(cfg.SuperProofWriteIntervalSeconds) {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {

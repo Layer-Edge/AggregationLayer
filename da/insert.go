@@ -10,7 +10,7 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/config"
 )
 
-var cfg = config.GetConfig()
+// var cfg = config.GetConfig() // Removed to avoid flag parsing during tests
 
 type ZKProof struct {
 }
@@ -44,6 +44,9 @@ func GetMerkleRoot(input string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error creating JSON request: %v", err)
 	}
+
+	// Get config when needed
+	cfg := config.GetConfig()
 
 	// Make POST request
 	resp, err := http.Post(

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -18,8 +20,9 @@ type Config struct {
 	User        string `yaml:"bitcoin-user"`
 	Auth        string `yaml:"bitcoin-auth"`
 
-	WriteIntervalBlock   int `yaml:"write-interval-blocks"`
-	WriteIntervalSeconds int `yaml:"write-interval-seconds"`
+	WriteIntervalBlock             int `yaml:"write-interval-blocks"`
+	WriteIntervalSeconds           int `yaml:"write-interval-seconds"`
+	SuperProofWriteIntervalSeconds int `yaml:"super-proof-write-interval-seconds"`
 
 	LayerEdgeRPC struct {
 		ChainID                   int64  `yaml:"chain-id"`
@@ -43,11 +46,61 @@ var ConfigFilePath = flag.String(
 
 func GetConfig() Config {
 	var cfg Config
-	flag.Parse()
+
+	// Check if we're in a test environment
+	if isTestEnvironment() {
+		// In test environment, use default config file
+		// Look for test_config.yml in the project root
+		if _, err := os.Stat("test_config.yml"); os.IsNotExist(err) {
+			// If not found in current directory, look in parent directories
+			*ConfigFilePath = findTestConfigFile()
+		} else {
+			*ConfigFilePath = "test_config.yml"
+		}
+	} else {
+		// In normal environment, parse flags
+		flag.Parse()
+	}
 
 	readFile(&cfg)
 
 	return cfg
+}
+
+// isTestEnvironment checks if we're running in a test environment
+func isTestEnvironment() bool {
+	// Check if we're running tests by looking at the command line arguments
+	for _, arg := range os.Args {
+		if strings.Contains(arg, "test") || strings.Contains(arg, "-test.") {
+			return true
+		}
+	}
+	return false
+}
+
+// findTestConfigFile searches for test_config.yml in parent directories
+func findTestConfigFile() string {
+	// Start from current directory and go up
+	dir, _ := os.Getwd()
+
+	for {
+		configPath := dir + "/test_config.yml"
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+
+		// Go up one directory
+		parent := dir + "/.."
+		parentAbs, err := filepath.Abs(parent)
+		if err != nil || parentAbs == dir {
+			// Can't go up further or reached root
+			break
+		}
+		dir = parentAbs
+	}
+
+	// Fallback to current directory
+	return "test_config.yml"
 }
 
 func validateConfig(cfg *Config) {
@@ -89,6 +142,10 @@ func validateConfig(cfg *Config) {
 
 	if cfg.WriteIntervalSeconds == 0 {
 		cfg.WriteIntervalSeconds = 600 // defaults to 10 min
+	}
+
+	if cfg.SuperProofWriteIntervalSeconds == 0 {
+		cfg.SuperProofWriteIntervalSeconds = 84600 // defaults to 24 hours
 	}
 }
 

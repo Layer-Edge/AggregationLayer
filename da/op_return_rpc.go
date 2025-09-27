@@ -2,16 +2,36 @@ package da
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
+
+	"github.com/Layer-Edge/bitcoin-da/utils"
 )
 
 var (
 	BTCEndpoint = ""
 	Auth        = ""
+
+	// RPC configuration
+	maxRetries     = 3
+	baseDelay      = 1 * time.Second
+	maxDelay       = 30 * time.Second
+	backoffFactor  = 2.0
+	requestTimeout = 30 * time.Second
+
+	// Circuit breaker for RPC calls
+	rpcMutex       sync.RWMutex
+	failureCount   int
+	lastFailTime   time.Time
+	circuitOpen    bool
+	circuitTimeout = 60 * time.Second
+	maxFailures    = 5
 )
 
 type response struct {
@@ -33,34 +53,137 @@ type signedtx struct {
 	Hex string `json:"hex"`
 }
 
-func Make_RPC_Call(url string, args []byte) string {
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
+// RPCCircuitBreaker manages the circuit breaker state for RPC calls
+type RPCCircuitBreaker struct {
+	mutex        sync.RWMutex
+	failureCount int
+	lastFailTime time.Time
+	circuitOpen  bool
+}
+
+// CanExecute checks if the circuit breaker allows execution
+func (cb *RPCCircuitBreaker) CanExecute() bool {
+	cb.mutex.RLock()
+	defer cb.mutex.RUnlock()
+
+	if !cb.circuitOpen {
+		return true
 	}
-	req, err := http.NewRequest("POST", BTCEndpoint, bytes.NewBuffer(args))
+
+	// Check if enough time has passed to try again
+	return time.Since(cb.lastFailTime) > circuitTimeout
+}
+
+// RecordSuccess records a successful operation
+func (cb *RPCCircuitBreaker) RecordSuccess() {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	cb.failureCount = 0
+	cb.circuitOpen = false
+}
+
+// RecordFailure records a failed operation
+func (cb *RPCCircuitBreaker) RecordFailure() {
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
+
+	cb.failureCount++
+	cb.lastFailTime = time.Now()
+
+	if cb.failureCount >= maxFailures {
+		cb.circuitOpen = true
+		log.Printf("RPC circuit breaker opened due to %d failures", cb.failureCount)
+	}
+}
+
+var rpcCircuitBreaker = &RPCCircuitBreaker{}
+
+// RetryRPCCall executes an RPC call with exponential backoff retry
+func RetryRPCCall(operation func() (string, error)) (string, error) {
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if !rpcCircuitBreaker.CanExecute() {
+			return "", fmt.Errorf("RPC circuit breaker is open, operation rejected")
+		}
+
+		if attempt > 0 {
+			delay := time.Duration(float64(baseDelay) *
+				utils.PowFloat(backoffFactor, float64(attempt-1)))
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+
+			log.Printf("Retrying RPC call after %v delay (attempt %d/%d)",
+				delay, attempt+1, maxRetries+1)
+
+			time.Sleep(delay)
+		}
+
+		result, err := operation()
+		if err == nil {
+			rpcCircuitBreaker.RecordSuccess()
+			return result, nil
+		}
+
+		lastErr = err
+		rpcCircuitBreaker.RecordFailure()
+		log.Printf("RPC call failed (attempt %d/%d): %v",
+			attempt+1, maxRetries+1, err)
+	}
+
+	return "", fmt.Errorf("RPC call failed after %d attempts: %w", maxRetries+1, lastErr)
+}
+
+func Make_RPC_Call(url string, args []byte) string {
+	result, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(url, args)
+	})
+
 	if err != nil {
-		log.Fatalf("Failed to create request to BTC: %v", err)
+		log.Printf("RPC call failed after retries: %v", err)
 		return ""
 	}
+
+	return result
+}
+
+// makeRPCCallWithTimeout makes a single RPC call with timeout and proper error handling
+func makeRPCCallWithTimeout(url string, args []byte) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", BTCEndpoint, bytes.NewBuffer(args))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Basic "+Auth)
+
+	httpClient := &http.Client{
+		Timeout: requestTimeout,
+	}
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Fatalf("Failed to send data to BTC: %v", err)
-		return ""
+		return "", fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
-	out, err := ioutil.ReadAll(resp.Body)
+
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("Failed to read BTC API response: %v", err)
-		return ""
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
+
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("BTC API returned non-OK status: %d, %s", resp.StatusCode, out)
-		return ""
+		return "", fmt.Errorf("BTC API returned non-OK status: %d, body: %s", resp.StatusCode, string(body))
 	}
-	log.Print("Successfully sent RPC: ", string(out))
-	return ExtractResult(string(out))
+
+	log.Printf("Successfully sent RPC: %s", string(body))
+	result := ExtractResult(string(body))
+	return result, nil
 }
 
 func ListUnspent() string {
@@ -83,8 +206,17 @@ func ListUnspent() string {
 		log.Printf("Failed to marshal listunspent payload: %v", err)
 		return ""
 	}
-	resp_str := Make_RPC_Call(BTCEndpoint, jsonPayload)
-	return resp_str
+
+	result, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
+	})
+
+	if err != nil {
+		log.Printf("ListUnspent RPC call failed: %v", err)
+		return ""
+	}
+
+	return result
 }
 
 func GetRawAddress() string {
@@ -96,8 +228,20 @@ func GetRawAddress() string {
 	}
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
+		log.Printf("Failed to marshal getrawchangeaddress payload: %v", err)
+		return ""
 	}
-	return Make_RPC_Call(BTCEndpoint, jsonPayload)
+
+	result, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
+	})
+
+	if err != nil {
+		log.Printf("GetRawAddress RPC call failed: %v", err)
+		return ""
+	}
+
+	return result
 }
 
 func CalculateRequired(numInputs int, dataSize int) float64 {
@@ -128,10 +272,10 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 			log.Printf("Failed to unmarshal response: %v", err)
 			return inputs, 0.0
 		} else {
-			log.Printf("UTXO : %s", u)
+			log.Printf("UTXO : %+v", u)
 		}
 
-		log.Printf("Processing UTXO: txid=%lf, vout=%d, amount=%lf", u.Txid, u.Vout, u.Amount)
+		log.Printf("Processing UTXO: txid=%s, vout=%d, amount=%f", u.Txid, u.Vout, u.Amount)
 
 		inputData := map[string]interface{}{
 			"txid": u.Txid,
@@ -141,7 +285,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 		totalAmt += float64(u.Amount)
 		required = CalculateRequired(numInputs+1, length)
 
-		log.Printf("Current total: %lf BTC, required: %lf BTC", totalAmt, required)
+		log.Printf("Current total: %f BTC, required: %f BTC", totalAmt, required)
 
 		if totalAmt >= required {
 			break
@@ -152,7 +296,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 		}
 	}
 	change := ((totalAmt - required) * 100000000) / float64(100000000)
-	log.Printf("Inputs: %v, Change: %s", inputs, change)
+	log.Printf("Inputs: %v, Change: %f", inputs, change)
 	return inputs, float64(change)
 }
 
@@ -186,7 +330,17 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 		log.Printf("Failed to marshal create raw transaction payload: %v", err)
 		return ""
 	}
-	return Make_RPC_Call(BTCEndpoint, jsonPayload)
+
+	result, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
+	})
+
+	if err != nil {
+		log.Printf("CreateRawTransaction RPC call failed: %v", err)
+		return ""
+	}
+
+	return result
 }
 
 func DecodeRawTransaction(rawtransaction string) {
@@ -231,7 +385,17 @@ func SignRawTransaction(rawtransaction string) string {
 		log.Printf("Failed to marshal sign raw transaction with wallet payload: %v", err)
 		return ""
 	}
-	return Make_RPC_Call(BTCEndpoint, jsonPayload)
+
+	result, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
+	})
+
+	if err != nil {
+		log.Printf("SignRawTransaction RPC call failed: %v", err)
+		return ""
+	}
+
+	return result
 }
 
 func SendSignedTransaction(transaction string) string {
@@ -255,7 +419,17 @@ func SendSignedTransaction(transaction string) string {
 		log.Printf("Failed to marshal send raw transaction payload: %v", err)
 		return ""
 	}
-	return Make_RPC_Call(BTCEndpoint, jsonPayload)
+
+	result, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
+	})
+
+	if err != nil {
+		log.Printf("SendSignedTransaction RPC call failed: %v", err)
+		return ""
+	}
+
+	return result
 }
 
 func ExtractResult(responseStr string) string {
@@ -288,19 +462,58 @@ func ExtractResult(responseStr string) string {
 func CreateOPReturnTransaction(data string) string {
 	log.Printf("Creating OP_RETURN transaction with data of length %d", len(data))
 
+	// Step 1: Get unspent outputs
 	unspent := ListUnspent()
+	if unspent == "" {
+		log.Printf("Failed to get unspent outputs")
+		return ""
+	}
+
+	// Step 2: Filter UTXOs
 	inputs, change := FilterUTXOs(unspent, len(data))
+	if len(inputs) == 0 {
+		log.Printf("No suitable UTXOs found for transaction")
+		return ""
+	}
+
+	// Step 3: Get raw address
 	rawaddr := GetRawAddress()
+	if rawaddr == "" {
+		log.Printf("Failed to get raw address")
+		return ""
+	}
+
+	// Step 4: Create raw transaction
 	rawtscn := CreateRawTransaction(inputs, rawaddr, change, data)
+	if rawtscn == "" {
+		log.Printf("Failed to create raw transaction")
+		return ""
+	}
+
+	// Step 5: Decode for verification (optional)
 	DecodeRawTransaction(rawtscn)
+
+	// Step 6: Sign transaction
 	signtscn := SignRawTransaction(rawtscn)
+	if signtscn == "" {
+		log.Printf("Failed to sign transaction")
+		return ""
+	}
+
+	// Step 7: Parse signed transaction
 	var sgn signedtx
 	err := json.Unmarshal([]byte(signtscn), &sgn)
 	if err != nil {
-		log.Printf("Failed to unmarshal response: %v", err)
+		log.Printf("Failed to unmarshal signed transaction response: %v", err)
 		return ""
 	}
+
+	// Step 8: Send signed transaction
 	sendtscn := SendSignedTransaction(sgn.Hex)
+	if sendtscn == "" {
+		log.Printf("Failed to send signed transaction")
+		return ""
+	}
 
 	log.Printf("Successfully created OP_RETURN transaction: %s", sendtscn)
 	return sendtscn
