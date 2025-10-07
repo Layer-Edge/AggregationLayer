@@ -150,7 +150,7 @@ func validateConfig(cfg *Config) {
 	}
 
 	if cfg.SuperProofWriteIntervalSeconds == 0 {
-		cfg.SuperProofWriteIntervalSeconds = 86400 // defaults to 24 hours
+		cfg.SuperProofWriteIntervalSeconds = 84600 // defaults to 24 hours
 	}
 }
 
