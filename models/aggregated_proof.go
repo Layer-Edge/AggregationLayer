@@ -17,6 +17,7 @@ type AggregatedProof struct {
 
 	ID              string    `bun:"id,pk,type:char(24),default:generate_mongo_objectid('mongo_objectid_aggregate_proofs_seq')"`
 	BlockHeight     int64     `bun:"block_height,unique,notnull"`
+	BTCBlockNumber  *int64    `bun:"btc_block_number,type:bigint"`
 	BTCTxHash       *string   `bun:"btc_tx_hash,type:varchar(255)"`
 	From            string    `bun:"from,type:varchar(255),notnull"`
 	GasUsed         int64     `bun:"gas_used,notnull,default:0"`
@@ -33,7 +34,11 @@ type AggregatedProof struct {
 	UpdatedAt       time.Time `bun:"updated_at,auto_update"`
 }
 
-func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash string, data clients.TxData) (sql.Result, error) {
+func CreateAggregatedProof(agg_proof string, proof_list []string, data clients.TxData) (sql.Result, error) {
+	return CreateAggregatedProofWithBTC(agg_proof, proof_list, nil, nil, data)
+}
+
+func CreateAggregatedProofWithBTC(agg_proof string, proof_list []string, btc_tx_hash *string, btc_block_number *int64, data clients.TxData) (sql.Result, error) {
 	block_height, err := strconv.ParseInt(data.BlockHeight, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("error converting block height: %w", err)
@@ -45,7 +50,8 @@ func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash st
 	}
 
 	ap := &AggregatedProof{
-		BTCTxHash:       &btc_tx_hash,
+		BTCTxHash:       btc_tx_hash,
+		BTCBlockNumber:  btc_block_number,
 		BlockHeight:     block_height,
 		From:            data.From,
 		GasUsed:         gas_used,
@@ -88,4 +94,82 @@ func CreateAggregatedProof(agg_proof string, proof_list []string, btc_tx_hash st
 
 	log.Println("Inserted AggregatedProof successfully")
 	return newAggProof, nil
+}
+
+// GetUnprocessedMerkleRoots fetches all merkle roots from aggregated_proofs that haven't been processed in a super proof yet
+func GetUnprocessedMerkleRoots(lastProcessedTimestamp time.Time) ([]string, error) {
+	var merkleRoots []string
+
+	err := RetryDBOperation(func() error {
+		db, err := GetDB()
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Query for merkle roots (aggregate_proof field) from records created after lastProcessedTimestamp
+		err = db.NewSelect().
+			Model(&AggregatedProof{}).
+			Column("aggregate_proof").
+			Where("timestamp > ?", lastProcessedTimestamp).
+			Order("timestamp ASC").
+			Scan(ctx, &merkleRoots)
+
+		if err != nil {
+			return fmt.Errorf("failed to fetch merkle roots: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get unprocessed merkle roots after retries: %w", err)
+	}
+
+	log.Printf("Fetched %d unprocessed merkle roots since %v", len(merkleRoots), lastProcessedTimestamp)
+	return merkleRoots, nil
+}
+
+// GetLastSuperProofTimestamp returns the timestamp of the last super proof creation
+// Super proofs are identified by having a non-null BTCTxHash
+func GetLastSuperProofTimestamp() (time.Time, error) {
+	var lastTimestamp time.Time
+
+	err := RetryDBOperation(func() error {
+		db, err := GetDB()
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Query for the most recent super proof (where btc_tx_hash is not null)
+		err = db.NewSelect().
+			Model(&AggregatedProof{}).
+			Column("timestamp").
+			Where("btc_tx_hash IS NOT NULL").
+			Order("timestamp DESC").
+			Limit(1).
+			Scan(ctx, &lastTimestamp)
+
+		if err != nil {
+			// If no super proof exists yet, return a default timestamp (24 hours ago)
+			if err == sql.ErrNoRows {
+				return nil // This will be handled in the calling code
+			}
+			return fmt.Errorf("failed to fetch last super proof timestamp: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return time.Now().UTC().Add(-24 * time.Hour), nil // Default to 24 hours ago
+	}
+
+	log.Printf("Last super proof timestamp: %v", lastTimestamp)
+	return lastTimestamp, nil
 }

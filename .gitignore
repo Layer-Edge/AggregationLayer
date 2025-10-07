@@ -15,3 +15,5 @@ scripts/logs
 scripts/*.out
 
 *.out
+
+*_config.yml

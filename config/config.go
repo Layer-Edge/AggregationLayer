@@ -28,6 +28,7 @@ type Config struct {
 		ChainID                   int64  `yaml:"chain-id"`
 		HTTP                      string `yaml:"http"`
 		MerkleTreeStorageContract string `yaml:"merkle-tree-storage-contract"`
+		SuperProofContract        string `yaml:"super-proof-contract"`
 		PrivateKey                string `yaml:"private-key"`
 	} `yaml:"layer-edge-rpc"`
 
@@ -130,6 +131,10 @@ func validateConfig(cfg *Config) {
 
 	if cfg.LayerEdgeRPC.MerkleTreeStorageContract == "" {
 		log.Fatal("LayerEdgeRPC MerkleTreeStorageContract is required")
+	}
+
+	if cfg.LayerEdgeRPC.SuperProofContract == "" {
+		log.Fatal("LayerEdgeRPC SuperProofContract is required")
 	}
 
 	if cfg.CMCAPIKey == "" {

@@ -140,14 +140,14 @@ func RetryContractCall(operation func() (*TxData, error)) (*TxData, error) {
 	return nil, fmt.Errorf("contract call failed after %d attempts: %w", retryConfig.MaxRetries+1, lastErr)
 }
 
-func StoreMerkleTree(cfg *config.Config, merkle_root string, leaves []string) (*TxData, error) {
+func StoreMerkleTree(cfg *config.Config, contractAddress string, merkle_root string, leaves []string) (*TxData, error) {
 	return RetryContractCall(func() (*TxData, error) {
-		return storeMerkleTreeWithRetry(cfg, merkle_root, leaves)
+		return storeMerkleTreeWithRetry(cfg, contractAddress, merkle_root, leaves)
 	})
 }
 
 // storeMerkleTreeWithRetry performs the actual contract interaction with enhanced error handling
-func storeMerkleTreeWithRetry(cfg *config.Config, merkle_root string, leaves []string) (*TxData, error) {
+func storeMerkleTreeWithRetry(cfg *config.Config, contractAddress string, merkle_root string, leaves []string) (*TxData, error) {
 	// Create client with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -202,8 +202,8 @@ func storeMerkleTreeWithRetry(cfg *config.Config, merkle_root string, leaves []s
 	auth.GasLimit = uint64(10000000) // gas limit
 	auth.GasPrice = gasPrice
 
-	contractAddress := common.HexToAddress(cfg.LayerEdgeRPC.MerkleTreeStorageContract)
-	merkleTreeStorageContract, err := contracts.NewMerkleTreeStorage(contractAddress, layerEdgeClient)
+	contractAddr := common.HexToAddress(contractAddress)
+	merkleTreeStorageContract, err := contracts.NewMerkleTreeStorage(contractAddr, layerEdgeClient)
 	if err != nil {
 		return nil, fmt.Errorf("error creating merkleTreeStorageContract: %w", err)
 	}
@@ -218,7 +218,7 @@ func storeMerkleTreeWithRetry(cfg *config.Config, merkle_root string, leaves []s
 
 	// Parse leaves string into array of bytes
 	// Expected format: plain strings that will be converted to bytes
-	var leafHashes [][]byte
+	var leafHashes [][32]byte
 
 	for _, leafStr := range leaves {
 		leafStr = strings.TrimSpace(leafStr)
@@ -227,7 +227,7 @@ func storeMerkleTreeWithRetry(cfg *config.Config, merkle_root string, leaves []s
 		}
 
 		// Convert plain string to bytes
-		leafHashes = append(leafHashes, []byte(leafStr))
+		leafHashes = append(leafHashes, common.HexToHash(leafStr))
 	}
 
 	// Prepare call data for gas estimation
@@ -243,7 +243,7 @@ func storeMerkleTreeWithRetry(cfg *config.Config, merkle_root string, leaves []s
 
 	callMsg := ethereum.CallMsg{
 		From:     fromAddress,
-		To:       &contractAddress,
+		To:       &contractAddr,
 		Gas:      0,
 		GasPrice: gasPrice,
 		Value:    big.NewInt(0),
@@ -286,7 +286,7 @@ func storeMerkleTreeWithRetry(cfg *config.Config, merkle_root string, leaves []s
 	return &TxData{
 		Success:         receipt.Status == 1,
 		From:            fromAddress.Hex(),
-		To:              cfg.LayerEdgeRPC.MerkleTreeStorageContract,
+		To:              contractAddress,
 		Amount:          fmt.Sprintf("%.18f", EdgenPrice*TransactionFee18Decimals),
 		TransactionHash: tx.Hash().Hex(),
 		TransactionFee:  fmt.Sprintf("%.18f", TransactionFee18Decimals),

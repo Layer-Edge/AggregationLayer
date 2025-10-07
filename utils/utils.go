@@ -3,6 +3,8 @@ package utils
 import (
 	"math"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // PowFloat calculates x^y
@@ -59,4 +61,16 @@ func FormatAmount(value *big.Int, decimals, places int) float64 {
 	}
 	pow := math.Pow(10, float64(places))
 	return math.Round(x*pow) / pow
+}
+
+// Keccak256Hash computes the Keccak-256 hash of the input data and returns it as a hex string
+func Keccak256Hash(data []byte) string {
+	hash := crypto.Keccak256Hash(data)
+	return hash.Hex()
+}
+
+// Keccak256HashBytes computes the Keccak-256 hash of the input data and returns the raw bytes
+func Keccak256HashBytes(data []byte) []byte {
+	hash := crypto.Keccak256Hash(data)
+	return hash.Bytes()
 }

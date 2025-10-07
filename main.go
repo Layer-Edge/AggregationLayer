@@ -33,9 +33,6 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Create a channel for super proof messages
-	superProofChan := make(chan [][]byte, 1000)
-
 	// Create separate error channels for each service
 	hashBlockDone := make(chan error, 1)
 	superProofDone := make(chan error, 1)
@@ -55,21 +52,21 @@ func main() {
 		}()
 
 		log.Println("Starting HashBlockSubscriber...")
-		da.HashBlockSubscriber(superProofChan, &cfg)
+		da.HashBlockSubscriber(&cfg)
 		hashBlockDone <- nil
 	}()
 
-	// Start SuperProofSubscriber service
+	// Start SuperProofCronJob service
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				utils.RecoverFromPanic("SuperProofSubscriber")
-				superProofDone <- fmt.Errorf("SuperProofSubscriber panic: %v", r)
+				utils.RecoverFromPanic("SuperProofCronJob")
+				superProofDone <- fmt.Errorf("SuperProofCronJob panic: %v", r)
 			}
 		}()
 
-		log.Println("Starting SuperProofSubscriber...")
-		da.SuperProofSubscriber(superProofChan, &cfg)
+		log.Println("Starting SuperProofCronJob...")
+		da.SuperProofCronJob(&cfg)
 		superProofDone <- nil
 	}()
 
@@ -113,9 +110,9 @@ func main() {
 
 	case err := <-superProofDone:
 		if err != nil {
-			utils.LogCriticalError("main", "SuperProofSubscriber failed", err, nil)
-			log.Fatalf("SuperProofSubscriber failed: %v", err)
+			utils.LogCriticalError("main", "SuperProofCronJob failed", err, nil)
+			log.Fatalf("SuperProofCronJob failed: %v", err)
 		}
-		log.Println("SuperProofSubscriber completed normally")
+		log.Println("SuperProofCronJob completed normally")
 	}
 }

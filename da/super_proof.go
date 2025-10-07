@@ -7,7 +7,6 @@ import (
 	// "github.com/ethereum/go-ethereum/accounts/abi"
 
 	"encoding/hex"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -23,15 +22,7 @@ func ProcessBTCMsg(msg []byte, protocolId string) ([]byte, error) {
 	return []byte(hash), nil
 }
 
-func SuperProofSubscriber(ch chan [][]byte, cfg *config.Config) {
-	// Initialize with enhanced error handling
-	dataReader := NewBlockSubscriber()
-	defer func() {
-		if err := dataReader.Close(); err != nil {
-			log.Printf("Error closing BlockSubscriber: %v", err)
-		}
-	}()
-
+func SuperProofCronJob(cfg *config.Config) {
 	// Initialize database with retry mechanism
 	err := models.InitDB(cfg.PostgresConnectionURI)
 	if err != nil {
@@ -43,111 +34,116 @@ func SuperProofSubscriber(ch chan [][]byte, cfg *config.Config) {
 		}
 	}()
 
-	counter := 0
-	aggr := Aggregator{data: ""}
-	prf := ZKProof{}
-	proof_list := []string{}
-	last_write := time.Now().Unix()
+	log.Println("Starting Super Proof Cron Job")
+	log.Printf("Super proof interval: %d seconds", cfg.SuperProofWriteIntervalSeconds)
 
-	fnAgg := func(msg [][]byte) bool {
-		log.Println("Aggregating message: ", string(msg[0]), string(msg[1]))
-		aggr.Aggregate(msg[1])
-		proof_list = append(proof_list, string(msg[1]))
-		return true
+	ticker := time.NewTicker(time.Duration(cfg.SuperProofWriteIntervalSeconds) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			processSuperProof(cfg)
+		}
+	}
+}
+
+func processSuperProof(cfg *config.Config) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in processSuperProof: %v", r)
+		}
+	}()
+
+	log.Println("Processing super proof...")
+
+	// Get the last processed timestamp
+	lastProcessedTimestamp, err := models.GetLastSuperProofTimestamp()
+	if err != nil {
+		log.Printf("Error getting last super proof timestamp: %v", err)
+		return
 	}
 
+	// Fetch all unprocessed merkle roots
+	merkleRoots, err := models.GetUnprocessedMerkleRoots(lastProcessedTimestamp)
+	if err != nil {
+		log.Printf("Error fetching unprocessed merkle roots: %v", err)
+		return
+	}
+
+	if len(merkleRoots) == 0 {
+		log.Println("No new merkle roots to process for super proof")
+		return
+	}
+
+	log.Printf("Found %d merkle roots to process in super proof", len(merkleRoots))
+
+	// Initialize data reader for BTC processing
+	dataReader := NewBlockSubscriber()
+	defer func() {
+		if err := dataReader.Close(); err != nil {
+			log.Printf("Error closing BlockSubscriber: %v", err)
+		}
+	}()
+
+	// Generate super proof (merkle tree of all merkle roots)
+	prf := ZKProof{}
+	superMerkleRoot := prf.GenerateAggregatedProof(strings.Join(merkleRoots, ""))
+
+	if superMerkleRoot == "" {
+		log.Println("Failed to generate super proof, skipping write")
+		return
+	}
+
+	log.Printf("Generated super proof: %s", superMerkleRoot)
+
+	// Process BTC transaction for the super proof
 	fnBtc := func(msg [][]byte) ([]byte, error) {
-		// Process
 		hash, err := ProcessBTCMsg(msg[1], cfg.ProtocolId)
 		return hash, err
 	}
 
-	fnWrite := func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("Panic in fnWrite: %v", r)
-			}
-		}()
-
-		// Generate and process proof
-		merkle_root := prf.GenerateAggregatedProof(aggr.data)
-		if merkle_root == "" {
-			log.Println("Failed to generate aggregated proof, skipping write")
-			return
-		}
-
-		log.Println("Aggregated Data: ", aggr.data)
-		log.Println("Aggregated Proof: ", merkle_root)
-		aggr.data = ""
-
-		hash, err := dataReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(merkle_root)})
-		if err != nil {
-			log.Println("Error writing -> ", err, "; out:", string(hash))
-			return
-		}
-
-		btc_tx_hash := strings.ReplaceAll(string(hash[:]), "\n", "")
-
-		// Store merkle tree with retry mechanism
-		txData, err := clients.StoreMerkleTree(cfg, merkle_root, proof_list)
-		if err != nil {
-			log.Printf("Error storing merkle tree: %v", err)
-			// Don't return, continue with database storage attempt
-		}
-
-		// Store in database with retry mechanism
-		if txData != nil {
-			aggProof, err := models.CreateAggregatedProof(
-				merkle_root,
-				proof_list,
-				btc_tx_hash,
-				*txData,
-			)
-			proof_list = make([]string, 0)
-			if err != nil {
-				log.Printf("Failed to store Aggregated Proof in DB: %v", err)
-				// Continue execution, don't crash
-			} else {
-				log.Printf("Stored Aggregated Proof: %v", aggProof)
-			}
-		} else {
-			log.Println("No transaction data available, skipping database storage")
-			proof_list = make([]string, 0)
-		}
+	hash, err := dataReader.ProcessOutTuple(fnBtc, [][]byte{nil, []byte(superMerkleRoot)})
+	if err != nil {
+		log.Printf("Error writing super proof to BTC: %v", err)
+		return
 	}
 
-	// Listen for messages with enhanced error handling
-	fmt.Println("Listening for Data Blocks and Hash Blocks (writer)...")
+	btcTxHash := strings.ReplaceAll(string(hash[:]), "\n", "")
+	log.Printf("Super proof BTC transaction hash: %s", btcTxHash)
 
-	for {
-		// Get message with timeout protection
-		msg := <-ch
+	// Get transaction details including block number
+	_, btcBlockNumber := GetTransactionInfo(btcTxHash)
+	if btcBlockNumber != nil {
+		log.Printf("Super proof BTC transaction confirmed in block: %d", *btcBlockNumber)
+	} else {
+		log.Printf("Super proof BTC transaction block information not available yet")
+	}
 
-		log.Println("Received data for aggregation")
-		if !dataReader.Validate(true, msg) {
-			log.Println("Message validation failed, skipping")
-			continue
+	// Store super proof merkle tree on LayerEdge
+	txData, err := clients.StoreMerkleTree(cfg, cfg.LayerEdgeRPC.SuperProofContract, superMerkleRoot, merkleRoots)
+	if err != nil {
+		log.Printf("Error storing super proof merkle tree: %v", err)
+		// Continue with database storage even if contract call fails
+	}
+
+	// Store super proof in database
+	if txData != nil {
+		// Create a super proof entry with BTC information
+		// Super proofs are distinguished by having BTCTxHash set (not null)
+		aggProof, err := models.CreateAggregatedProofWithBTC(
+			superMerkleRoot,
+			merkleRoots,    // The individual merkle roots are the "proofs" for the super proof
+			&btcTxHash,     // BTC transaction hash for super proof
+			btcBlockNumber, // BTC block number
+			*txData,
+		)
+		if err != nil {
+			log.Printf("Failed to store super proof in DB: %v", err)
+		} else {
+			log.Printf("Stored super proof successfully: %v", aggProof)
 		}
-
-		// Process message with error handling
-		counter++
-		if !dataReader.Process(fnAgg, msg) {
-			log.Println("Failed to process message, skipping")
-			continue
-		}
-
-		// Write to LayerEdge chain with error handling
-		now := time.Now().Unix()
-		if now-last_write > int64(cfg.SuperProofWriteIntervalSeconds) {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("Panic in fnWrite: %v", r)
-					}
-				}()
-				fnWrite()
-			}()
-			last_write = now
-		}
+	} else {
+		log.Println("No transaction data available for super proof, skipping database storage")
 	}
 }

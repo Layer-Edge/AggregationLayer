@@ -1,18 +1,14 @@
 package da
 
-import (
- "encoding/hex"
-)
-
 type Aggregator struct {
-    data string
+	data string
 }
 
 // Straight forward linear aggregation for now
-func (aggr *Aggregator) Aggregate(data []byte) {
-    if len(aggr.data) > 0 {
-	    aggr.data = aggr.data + ","
-    }
-    	
-    aggr.data = aggr.data + hex.EncodeToString(data)
+func (aggr *Aggregator) Aggregate(data string) {
+	if len(aggr.data) > 0 {
+		aggr.data = aggr.data + ","
+	}
+
+	aggr.data = aggr.data + data
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/Layer-Edge/bitcoin-da/clients"
 	"github.com/Layer-Edge/bitcoin-da/config"
 	"github.com/Layer-Edge/bitcoin-da/models"
+	"github.com/Layer-Edge/bitcoin-da/utils"
 )
 
 func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client) ([]byte, error) {
@@ -32,7 +33,7 @@ func ProcessMsg(msg []byte, protocolId string, layerEdgeClient *ethclient.Client
 	return []byte(hash), nil
 }
 
-func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
+func HashBlockSubscriber(cfg *config.Config) {
 	// Initialize with enhanced error handling
 	dataReader := NewBlockSubscriber()
 	defer func() {
@@ -61,13 +62,25 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 	counter := 0
 	aggr := Aggregator{data: ""}
 	prf := ZKProof{}
-	proof_list := []string{}
+	proof_list := []string{}    // For database storage (hex-encoded proofs)
+	merkle_leaves := []string{} // For merkle tree storage (proof hashes)
 	last_write := time.Now().Unix()
 
 	fnAgg := func(msg [][]byte) bool {
-		log.Println("Aggregating message: ", string(msg[0]), string(msg[1]))
-		aggr.Aggregate(msg[1])
-		proof_list = append(proof_list, string(msg[1]))
+		log.Println("Aggregating message: ", string(msg[0]), "proof length:", len(msg[1]))
+
+		// Store hex-encoded ABI proof for database
+		hexProof := "0x" + hex.EncodeToString(msg[1])
+		proof_list = append(proof_list, hexProof)
+
+		// Use keccak256 hash of the ABI proof as leaf for merkle tree
+		proofHash := utils.Keccak256Hash(msg[1])
+		aggr.Aggregate(proofHash)
+
+		// Store proof hash for merkle tree storage (without 0x prefix for contract)
+		merkle_leaves = append(merkle_leaves, proofHash)
+
+		log.Printf("Stored proof: %s, hash for merkle: %s", hexProof, proofHash)
 		return true
 	}
 
@@ -90,7 +103,7 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 		aggr.data = ""
 
 		// Store merkle tree with retry mechanism
-		txData, err := clients.StoreMerkleTree(cfg, merkle_root, proof_list)
+		txData, err := clients.StoreMerkleTree(cfg, cfg.LayerEdgeRPC.MerkleTreeStorageContract, merkle_root, merkle_leaves)
 		if err != nil {
 			log.Printf("Error storing merkle tree: %v", err)
 			// Don't return, continue with database storage attempt
@@ -101,20 +114,20 @@ func HashBlockSubscriber(ch chan [][]byte, cfg *config.Config) {
 			aggProof, err := models.CreateAggregatedProof(
 				merkle_root,
 				proof_list,
-				txData.TransactionHash,
 				*txData,
 			)
 			proof_list = make([]string, 0)
+			merkle_leaves = make([]string, 0)
 			if err != nil {
 				log.Printf("Failed to store Aggregated Proof in DB: %v", err)
 				// Continue execution, don't crash
 			} else {
-				ch <- [][]byte{[]byte("datablock"), []byte(merkle_root), []byte("!!!!!")}
 				log.Printf("Stored Aggregated Proof: %v", aggProof)
 			}
 		} else {
 			log.Println("No transaction data available, skipping database storage")
 			proof_list = make([]string, 0)
+			merkle_leaves = make([]string, 0)
 		}
 	}
 

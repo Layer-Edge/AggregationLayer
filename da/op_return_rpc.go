@@ -432,6 +432,69 @@ func SendSignedTransaction(transaction string) string {
 	return result
 }
 
+// GetTransactionInfo retrieves detailed transaction information including block details
+func GetTransactionInfo(txHash string) (string, *int64) {
+	if txHash == "" {
+		log.Printf("Empty transaction hash provided")
+		return "", nil
+	}
+
+	log.Printf("Getting transaction info for: %s", txHash)
+
+	payload := map[string]interface{}{
+		"jsonrpc": "1.0",
+		"id":      "get_tx_info",
+		"method":  "gettransaction",
+		"params": []interface{}{
+			txHash,
+		},
+	}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal get transaction payload: %v", err)
+		return "", nil
+	}
+
+	response, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
+	})
+
+	if err != nil {
+		log.Printf("GetTransactionInfo RPC call failed: %v", err)
+		return "", nil
+	}
+
+	// Parse the response to extract block height
+	var txResponse struct {
+		Result struct {
+			Blockhash     string `json:"blockhash,omitempty"`
+			Blockheight   *int64 `json:"blockheight,omitempty"`
+			Blockindex    *int   `json:"blockindex,omitempty"`
+			Blocktime     *int64 `json:"blocktime,omitempty"`
+			Confirmations *int   `json:"confirmations,omitempty"`
+			Txid          string `json:"txid"`
+		} `json:"result"`
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	err = json.Unmarshal([]byte(response), &txResponse)
+	if err != nil {
+		log.Printf("Failed to unmarshal transaction response: %v", err)
+		return response, nil
+	}
+
+	if txResponse.Error != nil {
+		log.Printf("RPC error in gettransaction: code=%d, message=%s", txResponse.Error.Code, txResponse.Error.Message)
+		return response, nil
+	}
+
+	log.Printf("Transaction info retrieved - Block height: %v, Confirmations: %v", txResponse.Result.Blockheight, txResponse.Result.Confirmations)
+	return response, txResponse.Result.Blockheight
+}
+
 func ExtractResult(responseStr string) string {
 	if responseStr == "" {
 		log.Print("Empty response string")
