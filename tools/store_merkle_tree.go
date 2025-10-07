@@ -1,0 +1,30 @@
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/Layer-Edge/bitcoin-da/clients"
+	"github.com/Layer-Edge/bitcoin-da/config"
+)
+
+var cfg = config.GetConfig()
+
+func main() {
+	// Test merkle root (32-byte hash)
+	merkleRoot := "0x114dd8fcc8ce5bc11f59a2022857861000d3132876535abe6d0a116c8bb91c97"
+
+	// Test leaves - multiple 32-byte hashes separated by commas
+	leaves := []string{"u2u-chain-000221cc00000d62f9687697a6f3b0465301501d83bd451309fbed5ba60ecb83", "kaanch-chain-60518d9c4eba99d016d19954497fc690f934e086f64a98bd8cd393c3c27bbb52", "avail-chain-c7ec1d57358bed0228e5424a6a2dc42cf0791b87f774ca262c4a732ed569fde1", "onlylayer-chain-23d394af3045d37f08f9e2b3b8efd47569f3f86a8c824ccff9b6947ef4c2dad4", "mintchain-chain-6673663f6b00a5d3bf16bfeef54be6735fb2bbd72566b7987703ad0ead987a38", "bitfinity-chain-7050cf2a181a5450488d54e60c3547e0295cdaeba5a54e437cfd70133d71e86b", "u2u-chain-000221cc00000d7025d64c862bc92fe546d4bcdf63aae078b3e1ebc16430cc29", "kaanch-chain-31710e72f188482d6f93a3beb439fa68945e43ce27b893fbf03a6621030a92f7", "avail-chain-342eb853320a009308a99632dd598dcc659db22471eab13fa96da0167f77aa2c", "onlylayer-chain-d409a98d58c1ada23757991127549bed4a129c4a5ec97ab5aa389f62f7c34cce", "mintchain-chain-cbf3fb483dc8149c28db07444a49caaff7a619abfde9ccb4124f138f10d7f9e4", "bitfinity-chain-d7c9e61a32224f2234cdce3b3b62debca4494edea1af9058037392c38045dfdd", "u2u-chain-000221cc00000d80e34594c80de5fd4e8dbd2ce76bdc32d1166a178ef020fd4f", "kaanch-chain-7190c626c08ababaa708410e81ad3ef24d40bb31128bf3b8c97d4c74d5a867d8", "avail-chain-6ce3084cf4495db285a054dd4a5b68d062c50c80a471291b6fd3240debdbb8c1", "onlylayer-chain-e6b7dfdecde5155d9445ab9092442710bc02789b504423c1dfd0baf7ff2ffcf8", "mintchain-chain-f1e1c520f97bb992a511c2487b747c4ef71faaf0f6f3232486727c157b9f2503", "bitfinity-chain-3d015cc7c376035fc76fb6ee410337f2d2ab98aebbf4adb43721954e50101f00", "u2u-chain-000221cc00000da1da1f059a256bbd49df719e7e8ae296a23b448cee9bd88b4b", "kaanch-chain-df2498579cf5c56ccc2c5410e1b619f5318e7227510aba05eed8acd2f4bc4545", "avail-chain-db0e542dc1d7e2c0fe403c43fc64475006cb5f80286edbfc84cc79cde3a37540", "onlylayer-chain-e9d721e8240cbeea9ab774be7682d9e35aae2a9aeda7a97279e1c98bb942fec5", "mintchain-chain-7119b612dea15c0b22850ec388198d3a87ea765ff0816c037ad2d7810cec3ed1", "bitfinity-chain-d024ec07c00a114170011d098b25ccd499879a2cbad7ebc4144377e43a904bfb", "u2u-chain-000221cc00000db7d15a7b104887d740fe73f64ecc7ac329e56d6678c496ee61", "kaanch-chain-790b58bbf6b327f2b836de3d3fb42418f0495257ff0d2ff7784dc51b41d5dacb", "avail-chain-6cdd82d3d451715e2e317131b027b172ceceba9ad537fdd438a4ece4e0786f59", "onlylayer-chain-70e04f6071c57461a53fcfc883ff40d304ba66a6a02c53e018855df706588c04", "mintchain-chain-5d71b742fb09226077754465c2549aabf67448061d0ff78e6082121cd1571dcb", "bitfinity-chain-c499f268210f360be9a7c62b46cb5e421448d958dab3d7e8892f5b0d2bd42e2e", "u2u-chain-000221cc00000dc5814643fb21608084cf9435df44f90b4ce3c6d57bc3a83635", "kaanch-chain-5b4c999fdf6ddf2063d4e5217d56275cf4f7d5e76668c0228e4f9b9fdb135e65", "avail-chain-bdf61e02df2fa4204050619e866eb8b04cf4512b117c212f5d8478747c53b9bf", "onlylayer-chain-8bcf7e6e2829bfae218cf228d4cfc1c05ada5e7333627929399e11ed3b727f76", "mintchain-chain-4f7ffe52f5f789958a5531ef9f3e0dba6fc2d86679a4accf874e2f94aa889189", "bitfinity-chain-7293388c589b39589f50a3fbc7c8f61c4618927aafe182e75ac80725da4f4e6a", "u2u-chain-000221cc00000ddeec57a7bf81dfe8c70c9ffd9678814b9e0adfb91b57452c75", "kaanch-chain-aa3a316380c160c0f9f124daa20084312d5288be8725f20a6ed37e841a4149f1", "avail-chain-cc3d37aa2793399be3f377cc30d1bac9a46a5d9db56f18525c74abcb894c6093", "onlylayer-chain-36e26c1cf3aa41b30a7d3d59a6b2c877e220832002f1ce6c00c0b73867c5e779", "mintchain-chain-4e8d55f7a670d2de6637bc8e1769052fe4ce9caa8820af82449948ffe9b4aa49", "bitfinity-chain-85557d5741d1bde758ea1ec41abbe4231e58dcd83f7e0abf88fd3cb8dbc837e2", "u2u-chain-000221cc00000df99ca29e30312379ec89c850043167b4b5bb852d5244880391", "kaanch-chain-a2551ef59ca04e3e44aef0ae8bbd35d583323da709dab02fda682fca75fb93fb", "avail-chain-fc4522f4c54469f13b4ffd9997ac999e4171f057e955d254f108f0b49759b056", "onlylayer-chain-69d0714674dd0204a6e00cab05fe6003e2f4e2529432615a6754e6acb57e5e01", "mintchain-chain-c1811a62a84600b7ba419e76142cd295d5dcd75c532b4af27cb281d1ff992164", "bitfinity-chain-0b35682982240d6896b559a59a8ab42fef9efa968422f59b9c81c18cda2437f2", "u2u-chain-000221cc00000e1a5a31303b1a35e00a738c7eced62ebbb95d1db4bd3e60098a", "kaanch-chain-9970bc9ede3093a7b3531b0d58e7d7b95ca6ed1c408ceb1f007faa1ace51fecf", "avail-chain-cc70cbfed757a09bbe4a436adae06dd4b3c07d00425da94d28a38ea8fb3e7def", "onlylayer-chain-0b1573b8910cdacd8fb04a4d65dabdeeb488b559c9d59b946f541e0ae1c5a7b8", "mintchain-chain-9b6895eb94bc10170cedc38acdbc3868452f77842e31e78d0305e42f71f2e5a9", "bitfinity-chain-0cb018b6253c64a6dd672c76d3fc2f0a55d90a3b522d3bcd031d03a7778b6927", "u2u-chain-000221cc00000e33ca68070bb6bea0e7ec7ad60d3608e6a519860835d8788bfc", "kaanch-chain-4cfb97693102e4aef7b94deaed74f4f5d714038aa0a745ef8efc99c5696679b8", "avail-chain-e7e5d7ded6addc852710a62ca3ad7b51d62470c07e25eebd8f51b9ac5ec66722", "onlylayer-chain-77fc743088a1bcbe300f75b32d7db79d07fd36d2c07e677ae65aead2ee5c036f", "mintchain-chain-4c4c82d0eeeb0ab9ba0369d94d080371e8618784555aff8d28cf0aeab49669ee", "bitfinity-chain-025018e9b3ae1e69b555568ea844e86409de60f08d5f5ac4ba14ddf05f431e36", "u2u-chain-000221cc00000e4c5bba1f9477825221a270643706ac1766515ccc463e0146bc", "kaanch-chain-65e3d8d7ff464470d203ad32f9e12229f57bd51d8f68b2e6c1ccf396c77c2536", "avail-chain-4369f1145654aa18fd5730a17112ddf168b6d1a97977545c6abec3fa099f748e", "onlylayer-chain-7dcade34e463ef25a8f9d65548555f2625f09fb13197fc424f28d7c1275d9a06"}
+
+	fmt.Printf("Testing StoreMerkleTree function...\n")
+	fmt.Printf("Merkle Root: %s\n", merkleRoot)
+	fmt.Printf("Leaves: %s\n", leaves)
+
+	txData, err := clients.StoreMerkleTree(&cfg, merkleRoot, leaves)
+	if err != nil {
+		log.Fatalf("Error storing merkle tree: %v", err)
+	}
+
+	fmt.Println("Merkle tree stored successfully!", txData)
+}
