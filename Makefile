@@ -1,5 +1,5 @@
 # Variables
-BINARY_NAME := bitcoin-da
+BINARY_NAME := LeAggLayer
 OUTPUT_DIR := build
 SOURCE_DIR := ./
 GO_FILES := $(wildcard $(SOURCE_DIR)/*.go)
