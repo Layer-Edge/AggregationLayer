@@ -80,6 +80,8 @@ func SuperProofCronJob(cfg *config.Config) {
 		}
 	}()
 
+	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth, cfg.WalletPassphrase)
+
 	log.Println("Starting Super Proof Cron Job")
 	log.Printf("Super proof interval: %d seconds", cfg.SuperProofWriteIntervalSeconds)
 

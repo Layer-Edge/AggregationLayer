@@ -187,7 +187,7 @@ func makeRPCCallWithTimeout(url string, args []byte) (string, error) {
 	return result, nil
 }
 
-func UnlockWallet() string {
+func UnlockWallet() bool {
 	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
 		"id":      "unlock",
@@ -200,19 +200,19 @@ func UnlockWallet() string {
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Failed to marshal listunspent payload: %v", err)
-		return ""
+		return false
 	}
 
-	result, err := RetryRPCCall(func() (string, error) {
+	_, err = RetryRPCCall(func() (string, error) {
 		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
 	})
 
 	if err != nil {
 		log.Printf("ListUnspent RPC call failed: %v", err)
-		return ""
+		return false
 	}
 
-	return result
+	return true
 }
 
 func ListUnspent() string {
@@ -555,7 +555,7 @@ func CreateOPReturnTransaction(data string) string {
 	log.Printf("Creating OP_RETURN transaction with data of length %d", len(data))
 
 	unlocked := UnlockWallet()
-	if unlocked == "" {
+	if !unlocked {
 		log.Printf("Failed to unlock wallet")
 		return ""
 	}
