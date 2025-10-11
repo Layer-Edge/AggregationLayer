@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	BTCEndpoint = ""
-	Auth        = ""
+	BTCEndpoint      = ""
+	Auth             = ""
+	WalletPassphrase = ""
 
 	// RPC configuration
 	maxRetries     = 3
@@ -184,6 +185,34 @@ func makeRPCCallWithTimeout(url string, args []byte) (string, error) {
 	log.Printf("Successfully sent RPC: %s", string(body))
 	result := ExtractResult(string(body))
 	return result, nil
+}
+
+func UnlockWallet() string {
+	payload := map[string]interface{}{
+		"jsonrpc": "1.0",
+		"id":      "unlock",
+		"method":  "walletpassphrase",
+		"params": []interface{}{
+			WalletPassphrase,
+			180,
+		},
+	}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal listunspent payload: %v", err)
+		return ""
+	}
+
+	result, err := RetryRPCCall(func() (string, error) {
+		return makeRPCCallWithTimeout(BTCEndpoint, jsonPayload)
+	})
+
+	if err != nil {
+		log.Printf("ListUnspent RPC call failed: %v", err)
+		return ""
+	}
+
+	return result
 }
 
 func ListUnspent() string {
@@ -525,6 +554,14 @@ func ExtractResult(responseStr string) string {
 func CreateOPReturnTransaction(data string) string {
 	log.Printf("Creating OP_RETURN transaction with data of length %d", len(data))
 
+	unlocked := UnlockWallet()
+	if unlocked == "" {
+		log.Printf("Failed to unlock wallet")
+		return ""
+	}
+
+	log.Printf("Wallet unlocked: %s", unlocked)
+
 	// Step 1: Get unspent outputs
 	unspent := ListUnspent()
 	if unspent == "" {
@@ -582,7 +619,8 @@ func CreateOPReturnTransaction(data string) string {
 	return sendtscn
 }
 
-func InitOPReturnRPC(endpoint string, auth string) {
+func InitOPReturnRPC(endpoint string, auth string, passphrase string) {
 	BTCEndpoint = endpoint
 	Auth = auth
+	WalletPassphrase = passphrase
 }

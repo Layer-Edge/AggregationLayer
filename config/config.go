@@ -16,9 +16,10 @@ type Config struct {
 
 	ZmqEndpointDataBlock string `yaml:"zmq-endpoint-data-block"`
 
-	BtcEndpoint string `yaml:"bitcoin-endpoint"`
-	User        string `yaml:"bitcoin-user"`
-	Auth        string `yaml:"bitcoin-auth"`
+	BtcEndpoint      string `yaml:"bitcoin-endpoint"`
+	User             string `yaml:"bitcoin-user"`
+	Auth             string `yaml:"bitcoin-auth"`
+	WalletPassphrase string `yaml:"bitcoin-wallet-passphrase"`
 
 	WriteIntervalBlock             int `yaml:"write-interval-blocks"`
 	WriteIntervalSeconds           int `yaml:"write-interval-seconds"`
@@ -121,6 +122,11 @@ func validateConfig(cfg *Config) {
 		log.Fatal("BTC Auth is not given")
 	}
 
+	if cfg.WalletPassphrase == "" {
+		log.Fatal("BTC Wallet Passphrase is not given")
+	}
+
+	log.Printf("LayerEdgeRPC HTTP: %s", cfg.LayerEdgeRPC.HTTP)
 	if cfg.LayerEdgeRPC.HTTP == "" {
 		log.Fatal("LayerEdgeRPC URL is required")
 	}
