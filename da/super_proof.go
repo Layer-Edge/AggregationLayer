@@ -1,11 +1,6 @@
 package da
 
 import (
-	// "context"
-
-	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
-	// "github.com/ethereum/go-ethereum/accounts/abi"
-
 	"encoding/hex"
 	"log"
 	"strings"
@@ -22,52 +17,6 @@ func ProcessBTCMsg(msg []byte, protocolId string) ([]byte, error) {
 	return []byte(hash), nil
 }
 
-// func SuperProofCronJob(cfg *config.Config) {
-// 	// Initialize database with retry mechanism
-// 	err := models.InitDB(cfg.PostgresConnectionURI)
-// 	if err != nil {
-// 		log.Fatalf("Error initializing DB Connection: %v", err)
-// 	}
-// 	defer func() {
-// 		if err := models.CloseDB(); err != nil {
-// 			log.Printf("Error closing database: %v", err)
-// 		}
-// 	}()
-
-// 	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth, cfg.WalletPassphrase)
-
-// 	log.Println("Starting Super Proof Cron Job")
-// 	log.Println("Super proof will run daily at 12:00 AM UTC")
-
-// 	for {
-// 		// Calculate next midnight UTC
-// 		now := time.Now().UTC()
-// 		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
-
-// 		// If it's already past midnight today, schedule for tomorrow
-// 		if now.Hour() >= 0 && now.Minute() >= 0 && now.Second() >= 0 {
-// 			nextMidnight = time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
-// 		}
-
-// 		// If it's exactly midnight or just past, run immediately
-// 		if now.Hour() == 0 && now.Minute() == 0 {
-// 			log.Println("Running super proof at midnight UTC")
-// 			processSuperProof(cfg)
-// 		}
-
-// 		// Calculate duration until next midnight
-// 		duration := nextMidnight.Sub(now)
-// 		log.Printf("Next super proof scheduled for: %s (in %v)", nextMidnight.Format("2006-01-02 15:04:05 UTC"), duration)
-
-// 		// Wait until next midnight
-// 		time.Sleep(duration)
-
-// 		// Run the super proof process
-// 		log.Println("Running super proof at scheduled time")
-// 		processSuperProof(cfg)
-// 	}
-// }
-
 func SuperProofCronJob(cfg *config.Config) {
 	// Initialize database with retry mechanism
 	err := models.InitDB(cfg.PostgresConnectionURI)
@@ -83,16 +32,34 @@ func SuperProofCronJob(cfg *config.Config) {
 	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth, cfg.WalletPassphrase)
 
 	log.Println("Starting Super Proof Cron Job")
-	log.Printf("Super proof interval: %d seconds", cfg.SuperProofWriteIntervalSeconds)
-
-	ticker := time.NewTicker(time.Duration(cfg.SuperProofWriteIntervalSeconds) * time.Second)
-	defer ticker.Stop()
+	log.Println("Super proof will run daily at 12:00 AM UTC")
 
 	for {
-		select {
-		case <-ticker.C:
+		// Calculate next midnight UTC
+		now := time.Now().UTC()
+		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+
+		// If it's already past midnight today, schedule for tomorrow
+		if now.Hour() >= 0 && now.Minute() >= 0 && now.Second() >= 0 {
+			nextMidnight = time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+		}
+
+		// If it's exactly midnight or just past, run immediately
+		if now.Hour() == 0 && now.Minute() == 0 {
+			log.Println("Running super proof at midnight UTC")
 			processSuperProof(cfg)
 		}
+
+		// Calculate duration until next midnight
+		duration := nextMidnight.Sub(now)
+		log.Printf("Next super proof scheduled for: %s (in %v)", nextMidnight.Format("2006-01-02 15:04:05 UTC"), duration)
+
+		// Wait until next midnight
+		time.Sleep(duration)
+
+		// Run the super proof process
+		log.Println("Running super proof at scheduled time")
+		processSuperProof(cfg)
 	}
 }
 
