@@ -32,35 +32,45 @@ func SuperProofCronJob(cfg *config.Config) {
 	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth, cfg.WalletPassphrase)
 
 	log.Println("Starting Super Proof Cron Job")
-	log.Println("Super proof will run daily at 12:00 AM UTC")
+	log.Println("Super proof will run 6 times daily at 12:00 AM, 4:00 AM, 8:00 AM, 12:00 PM, 4:00 PM, and 8:00 PM UTC")
+
+	// Define the scheduled hours (0, 4, 8, 12, 16, 20 in 24-hour format)
+	scheduledHours := []int{0, 4, 8, 12, 16, 20}
 
 	for {
-		// Calculate next midnight UTC
 		now := time.Now().UTC()
-		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
 
-		// If it's already past midnight today, schedule for tomorrow
-		if now.Hour() >= 0 && now.Minute() >= 0 && now.Second() >= 0 {
-			nextMidnight = time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
-		}
+		// Find the next scheduled time
+		nextScheduledTime := findNextScheduledTime(now, scheduledHours)
 
-		// If it's exactly midnight or just past, run immediately
-		if now.Hour() == 0 && now.Minute() == 0 {
-			log.Println("Running super proof at midnight UTC")
-			processSuperProof(cfg)
-		}
+		// Calculate duration until next scheduled time
+		duration := nextScheduledTime.Sub(now)
+		log.Printf("Next super proof scheduled for: %s (in %v)", nextScheduledTime.Format("2006-01-02 15:04:05 UTC"), duration)
 
-		// Calculate duration until next midnight
-		duration := nextMidnight.Sub(now)
-		log.Printf("Next super proof scheduled for: %s (in %v)", nextMidnight.Format("2006-01-02 15:04:05 UTC"), duration)
-
-		// Wait until next midnight
+		// Wait until next scheduled time
 		time.Sleep(duration)
 
 		// Run the super proof process
-		log.Println("Running super proof at scheduled time")
+		log.Printf("Running super proof at scheduled time: %s", time.Now().UTC().Format("2006-01-02 15:04:05 UTC"))
 		processSuperProof(cfg)
 	}
+}
+
+// findNextScheduledTime calculates the next scheduled time based on current time and scheduled hours
+func findNextScheduledTime(now time.Time, scheduledHours []int) time.Time {
+	currentHour := now.Hour()
+
+	// Find the next hour in today's schedule
+	for _, hour := range scheduledHours {
+		if hour > currentHour {
+			// Found a time later today
+			return time.Date(now.Year(), now.Month(), now.Day(), hour, 0, 0, 0, time.UTC)
+		}
+	}
+
+	// No more times today, schedule for the first time tomorrow
+	nextDay := now.AddDate(0, 0, 1)
+	return time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), scheduledHours[0], 0, 0, 0, time.UTC)
 }
 
 func processSuperProof(cfg *config.Config) {

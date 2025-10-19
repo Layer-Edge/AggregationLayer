@@ -26,11 +26,7 @@ var (
 	backoffFactor  = 2.0
 	requestTimeout = 30 * time.Second
 
-	// Circuit breaker for RPC calls
-	rpcMutex       sync.RWMutex
-	failureCount   int
-	lastFailTime   time.Time
-	circuitOpen    bool
+	// Circuit breaker configuration
 	circuitTimeout = 60 * time.Second
 	maxFailures    = 5
 )
@@ -45,9 +41,10 @@ type response struct {
 }
 
 type utxo struct {
-	Txid   string  `json:"txid"`
-	Vout   int     `json:"vout"`
-	Amount float64 `json:"amount"`
+	Txid    string  `json:"txid"`
+	Vout    int     `json:"vout"`
+	Amount  float64 `json:"amount"`
+	Address string  `json:"address,omitempty"`
 }
 
 type signedtx struct {
@@ -277,20 +274,21 @@ func CalculateRequired(numInputs int, dataSize int) float64 {
 	return float64(53+numInputs*68+dataSize) * float64(0.00000001)
 }
 
-func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64) {
+func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64, string) {
 	inputs := []map[string]interface{}{}
 	if unspent == "" {
-		return inputs, 0.0
+		return inputs, 0.0, ""
 	}
 	var t []json.RawMessage
 	err := json.Unmarshal([]byte(unspent), &t)
 	if err != nil {
 		log.Printf("Failed to unmarshal response: %v", err)
-		return inputs, 0.0
+		return inputs, 0.0, ""
 	}
 	totalAmt := 0.0
 	numInputs := 0
 	required := 0.0
+	var changeAddress string
 
 	log.Printf("Found %d UTXOs to process", len(t))
 
@@ -299,7 +297,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 		err := json.Unmarshal(t[numInputs], &u)
 		if err != nil {
 			log.Printf("Failed to unmarshal response: %v", err)
-			return inputs, 0.0
+			return inputs, 0.0, ""
 		} else {
 			log.Printf("UTXO : %+v", u)
 		}
@@ -314,6 +312,11 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 		totalAmt += float64(u.Amount)
 		required = CalculateRequired(numInputs+1, length)
 
+		// Use the address from the first UTXO as change address
+		if numInputs == 0 && u.Address != "" {
+			changeAddress = u.Address
+		}
+
 		log.Printf("Current total: %f BTC, required: %f BTC", totalAmt, required)
 
 		if totalAmt >= required {
@@ -321,12 +324,12 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 		}
 		numInputs++
 		if numInputs >= 10 {
-			return []map[string]interface{}{}, 0.0
+			return []map[string]interface{}{}, 0.0, ""
 		}
 	}
 	change := ((totalAmt - required) * 100000000) / float64(100000000)
-	log.Printf("Inputs: %v, Change: %f", inputs, change)
-	return inputs, float64(change)
+	log.Printf("Inputs: %v, Change: %f, Change Address: %s", inputs, change, changeAddress)
+	return inputs, float64(change), changeAddress
 }
 
 func CreateRawTransaction(inputs []map[string]interface{}, address string, change float64, data string) string {
@@ -340,7 +343,10 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 		return ""
 	}
 
-	log.Printf("Creating raw transaction with %d inputs, change address %s, change amount %f", len(inputs), address, change)
+	// Convert BTC to satoshis (1 BTC = 100,000,000 satoshis)
+	changeSatoshis := int64(change * 100000000)
+
+	log.Printf("Creating raw transaction with %d inputs, change address %s, change amount %f BTC (%d satoshis)", len(inputs), address, change, changeSatoshis)
 
 	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
@@ -350,7 +356,7 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 			inputs,
 			map[string]interface{}{
 				"data":  data,
-				address: change,
+				address: changeSatoshis,
 			},
 		},
 	}
@@ -560,7 +566,7 @@ func CreateOPReturnTransaction(data string) string {
 		return ""
 	}
 
-	log.Printf("Wallet unlocked: %s", unlocked)
+	log.Printf("Wallet unlocked: %t", unlocked)
 
 	// Step 1: Get unspent outputs
 	unspent := ListUnspent()
@@ -570,37 +576,35 @@ func CreateOPReturnTransaction(data string) string {
 	}
 
 	// Step 2: Filter UTXOs
-	inputs, change := FilterUTXOs(unspent, len(data))
+	inputs, change, changeAddress := FilterUTXOs(unspent, len(data))
 	if len(inputs) == 0 {
 		log.Printf("No suitable UTXOs found for transaction")
 		return ""
 	}
 
-	// Step 3: Get raw address
-	rawaddr := GetRawAddress()
-	if rawaddr == "" {
-		log.Printf("Failed to get raw address")
+	if changeAddress == "" {
+		log.Printf("No change address found in UTXOs")
 		return ""
 	}
 
-	// Step 4: Create raw transaction
-	rawtscn := CreateRawTransaction(inputs, rawaddr, change, data)
+	// Step 3: Create raw transaction using change address from UTXOs
+	rawtscn := CreateRawTransaction(inputs, changeAddress, change, data)
 	if rawtscn == "" {
 		log.Printf("Failed to create raw transaction")
 		return ""
 	}
 
-	// Step 5: Decode for verification (optional)
+	// Step 4: Decode for verification (optional)
 	DecodeRawTransaction(rawtscn)
 
-	// Step 6: Sign transaction
+	// Step 5: Sign transaction
 	signtscn := SignRawTransaction(rawtscn)
 	if signtscn == "" {
 		log.Printf("Failed to sign transaction")
 		return ""
 	}
 
-	// Step 7: Parse signed transaction
+	// Step 6: Parse signed transaction
 	var sgn signedtx
 	err := json.Unmarshal([]byte(signtscn), &sgn)
 	if err != nil {
@@ -608,7 +612,7 @@ func CreateOPReturnTransaction(data string) string {
 		return ""
 	}
 
-	// Step 8: Send signed transaction
+	// Step 7: Send signed transaction
 	sendtscn := SendSignedTransaction(sgn.Hex)
 	if sendtscn == "" {
 		log.Printf("Failed to send signed transaction")
