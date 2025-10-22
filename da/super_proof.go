@@ -32,10 +32,10 @@ func SuperProofCronJob(cfg *config.Config) {
 	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth, cfg.WalletPassphrase)
 
 	log.Println("Starting Super Proof Cron Job")
-	log.Println("Super proof will run 6 times daily at 12:00 AM, 4:00 AM, 8:00 AM, 12:00 PM, 4:00 PM, and 8:00 PM UTC")
+	log.Println("Super proof will run 4 times daily at 12:00 AM, 6:00 AM, 12:00 PM, and 6:00 PM UTC")
 
-	// Define the scheduled hours (0, 4, 8, 12, 16, 20 in 24-hour format)
-	scheduledHours := []int{0, 4, 8, 12, 16, 20}
+	// Define the scheduled hours (0, 6, 12, 18 in 24-hour format)
+	scheduledHours := []int{0, 6, 12, 18}
 
 	for {
 		now := time.Now().UTC()
@@ -53,6 +53,51 @@ func SuperProofCronJob(cfg *config.Config) {
 		// Run the super proof process
 		log.Printf("Running super proof at scheduled time: %s", time.Now().UTC().Format("2006-01-02 15:04:05 UTC"))
 		processSuperProof(cfg)
+	}
+}
+
+func NonBTCTxSuperProofCronJob(cfg *config.Config, immediate bool) {
+
+	err := models.InitDB(cfg.PostgresConnectionURI)
+	if err != nil {
+		log.Fatalf("Error initializing DB Connection: %v", err)
+	}
+	defer func() {
+		if err := models.CloseDB(); err != nil {
+			log.Printf("Error closing database: %v", err)
+		}
+	}()
+
+	InitOPReturnRPC(cfg.BtcEndpoint, cfg.Auth, cfg.WalletPassphrase)
+
+	log.Println("Starting Non BTC TX Super Proof Cron Job")
+	log.Println("Super proof will run at 1:00 AM, 7:00 AM, 1:00 PM, and 7:00 PM UTC")
+
+	// Define the scheduled hours (1 in 24-hour format)
+	scheduledHours := []int{1, 7, 13, 19}
+
+	if immediate {
+		log.Println("Running non BTC TX super proof immediately")
+		processNonBTCTxSuperProof(cfg)
+		return
+	}
+
+	for {
+		now := time.Now().UTC()
+
+		// Find the next scheduled time
+		nextScheduledTime := findNextScheduledTime(now, scheduledHours)
+
+		// Calculate duration until next scheduled time
+		duration := nextScheduledTime.Sub(now)
+		log.Printf("Next super proof scheduled for: %s (in %v)", nextScheduledTime.Format("2006-01-02 15:04:05 UTC"), duration)
+
+		// Wait until next scheduled time
+		time.Sleep(duration)
+
+		// Run the super proof process
+		log.Printf("Running super proof at scheduled time: %s", time.Now().UTC().Format("2006-01-02 15:04:05 UTC"))
+		processNonBTCTxSuperProof(cfg)
 	}
 }
 
@@ -171,4 +216,64 @@ func processSuperProof(cfg *config.Config) {
 	} else {
 		log.Println("No transaction data available for super proof, skipping database storage")
 	}
+}
+
+func processNonBTCTxSuperProof(cfg *config.Config) {
+	log.Println("Processing non BTC TX super proof...")
+
+	// Get the last processed timestamp
+	superProofWithoutBTCTxHash, err := models.GetSuperProofsWithoutBTCTxHash()
+	if err != nil {
+		log.Printf("Error getting last super proof timestamp: %v", err)
+		return
+	}
+
+	if len(superProofWithoutBTCTxHash) == 0 {
+		log.Println("No super proofs without BTC TX hash to process")
+		return
+	}
+
+	log.Printf("Found %d super proofs without BTC TX hash to process", len(superProofWithoutBTCTxHash))
+
+	// Initialize data reader for BTC processing
+	dataReader := NewBlockSubscriber()
+	defer func() {
+		if err := dataReader.Close(); err != nil {
+			log.Printf("Error closing BlockSubscriber: %v", err)
+		}
+	}()
+
+	fnBtc := func(msg [][]byte) ([]byte, error) {
+		hash, err := ProcessBTCMsg(msg[1], cfg.ProtocolId)
+		return hash, err
+	}
+
+	superProof := superProofWithoutBTCTxHash[0]
+
+	log.Printf("Processing super proof without BTC TX hash: %s", superProof.ID)
+
+	hash, err := dataReader.ProcessOutTuple(fnBtc, [][]byte{nil, superProof.AggregateProof})
+	if err != nil {
+		log.Printf("Error writing super proof to BTC: %v", err)
+		return
+	}
+
+	btcTxHash := strings.ReplaceAll(string(hash[:]), "\n", "")
+	log.Printf("Super proof BTC transaction hash: %s", btcTxHash)
+
+	// Get transaction details including block number
+	_, btcBlockNumber := GetTransactionInfo(btcTxHash)
+	if btcBlockNumber != nil {
+		log.Printf("Super proof BTC transaction confirmed in block: %d", *btcBlockNumber)
+	} else {
+		log.Printf("Super proof BTC transaction block information not available yet")
+	}
+
+	err = models.UpdateSuperProofWithBTCTxHash(superProof.ID, &btcTxHash, btcBlockNumber)
+	if err != nil {
+		log.Printf("Error updating super proof with BTC TX hash: %v", err)
+		return
+	}
+
+	log.Printf("Updated super proof with BTC TX hash: %s", superProof.ID)
 }
