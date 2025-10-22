@@ -271,7 +271,7 @@ func GetRawAddress() string {
 }
 
 func CalculateRequired(numInputs int, dataSize int) float64 {
-	return float64(53+numInputs*68+dataSize) * float64(0.00000002)
+	return float64(53+numInputs*68+dataSize) * float64(0.00000001)
 }
 
 func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64, string) {
@@ -309,8 +309,8 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64,
 			"vout": u.Vout,
 		}
 		inputs = append(inputs, inputData)
-		totalAmt += float64(u.Amount)
-		required = CalculateRequired(numInputs+1, length)
+		totalAmt += (float64(u.Amount) * 100000000)
+		required = (CalculateRequired(numInputs+1, length) * 100000000)
 
 		// Use the address from the first UTXO as change address
 		if numInputs == 0 && u.Address != "" {
@@ -327,7 +327,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64,
 			return []map[string]interface{}{}, 0.0, ""
 		}
 	}
-	change := ((totalAmt - required) * 100000000) / float64(100000000)
+	change := (totalAmt - required) / float64(100000000)
 	log.Printf("Inputs: %v, Change: %f, Change Address: %s", inputs, change, changeAddress)
 	return inputs, float64(change), changeAddress
 }

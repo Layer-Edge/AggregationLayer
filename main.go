@@ -36,6 +36,7 @@ func main() {
 	// Create separate error channels for each service
 	hashBlockDone := make(chan error, 1)
 	superProofDone := make(chan error, 1)
+	failedSuperProofDone := make(chan error, 1)
 
 	log.Println("Starting Bitcoin DA services...")
 	utils.LogSystemError("main", "Services starting", nil, map[string]interface{}{
@@ -70,6 +71,20 @@ func main() {
 		superProofDone <- nil
 	}()
 
+	// Start NonBTCTxSuperProofCronJob service
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				utils.RecoverFromPanic("NonBTCTxSuperProofCronJob")
+				failedSuperProofDone <- fmt.Errorf("NonBTCTxSuperProofCronJob panic: %v", r)
+			}
+		}()
+
+		log.Println("Starting NonBTCTxSuperProofCronJob...")
+		da.NonBTCTxSuperProofCronJob(&cfg, false)
+		failedSuperProofDone <- nil
+	}()
+
 	// Wait for either shutdown signal or service completion
 	select {
 	case sig := <-sigChan:
@@ -89,6 +104,7 @@ func main() {
 			// Wait for both services to complete
 			<-hashBlockDone
 			<-superProofDone
+			<-failedSuperProofDone
 			servicesShutdown <- true
 		}()
 
@@ -114,5 +130,12 @@ func main() {
 			log.Fatalf("SuperProofCronJob failed: %v", err)
 		}
 		log.Println("SuperProofCronJob completed normally")
+
+	case err := <-failedSuperProofDone:
+		if err != nil {
+			utils.LogCriticalError("main", "NonBTCTxSuperProofCronJob failed", err, nil)
+			log.Fatalf("NonBTCTxSuperProofCronJob failed: %v", err)
+		}
+		log.Println("NonBTCTxSuperProofCronJob completed normally")
 	}
 }

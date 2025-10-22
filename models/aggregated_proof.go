@@ -173,3 +173,74 @@ func GetLastSuperProofTimestamp() (time.Time, error) {
 	log.Printf("Last super proof timestamp: %v", lastTimestamp)
 	return lastTimestamp, nil
 }
+
+func GetSuperProofsWithoutBTCTxHash() ([]AggregatedProof, error) {
+	var proofs []AggregatedProof
+
+	err := RetryDBOperation(func() error {
+		db, err := GetDB()
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Query for the most recent super proof (where btc_tx_hash is not null)
+		err = db.NewSelect().
+			Model(&proofs).
+			Where("btc_tx_hash = ''").
+			Order("id ASC").
+			Limit(1).
+			Scan(ctx)
+
+		if err != nil {
+			// If no super proof exists yet, return a default timestamp (24 hours ago)
+			if err == sql.ErrNoRows {
+				return nil // This will be handled in the calling code
+			}
+			return fmt.Errorf("failed to fetch last super proof timestamp: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err // Default to 24 hours ago
+	}
+
+	log.Printf("Found %d Super Proofs Without BTC TX Hash", len(proofs))
+	return proofs, nil
+}
+
+func UpdateSuperProofWithBTCTxHash(id string, btc_tx_hash *string, btc_block_number *int64) error {
+	err := RetryDBOperation(func() error {
+		db, err := GetDB()
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err = db.NewUpdate().
+			Model(&AggregatedProof{}).
+			Where("id = ?", id).
+			Set("btc_tx_hash = ?", btc_tx_hash).
+			Set("btc_block_number = ?", btc_block_number).
+			Exec(ctx)
+
+		if err != nil {
+			return fmt.Errorf("failed to update super proof with BTC TX hash: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update super proof with BTC TX hash after retries: %w", err)
+	}
+
+	log.Printf("Updated super proof with BTC TX hash: %s", id)
+	return nil
+}
