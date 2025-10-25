@@ -276,4 +276,19 @@ func processNonBTCTxSuperProof(cfg *config.Config) {
 	}
 
 	log.Printf("Updated super proof with BTC TX hash: %s", superProof.ID)
+
+	// Calculate and store transaction fee in USD
+	transactionFeeUSD, err := CalculateTransactionFeeUSD(btcTxHash, 0)
+	if err != nil {
+		log.Printf("Error calculating transaction fee: %v", err)
+		// Continue execution even if fee calculation fails
+	} else {
+		err = models.UpdateSuperProofWithTransactionFee(superProof.ID, transactionFeeUSD)
+		if err != nil {
+			log.Printf("Error updating super proof with transaction fee: %v", err)
+			// Continue execution even if fee update fails
+		} else {
+			log.Printf("Successfully updated super proof with transaction fee: $%.2f USD", transactionFeeUSD)
+		}
+	}
 }

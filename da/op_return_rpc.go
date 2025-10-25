@@ -26,7 +26,11 @@ var (
 	backoffFactor  = 2.0
 	requestTimeout = 30 * time.Second
 
-	// Circuit breaker configuration
+	// Circuit breaker for RPC calls
+	rpcMutex       sync.RWMutex
+	failureCount   int
+	lastFailTime   time.Time
+	circuitOpen    bool
 	circuitTimeout = 60 * time.Second
 	maxFailures    = 5
 )
@@ -41,10 +45,9 @@ type response struct {
 }
 
 type utxo struct {
-	Txid    string  `json:"txid"`
-	Vout    int     `json:"vout"`
-	Amount  float64 `json:"amount"`
-	Address string  `json:"address,omitempty"`
+	Txid   string  `json:"txid"`
+	Vout   int     `json:"vout"`
+	Amount float64 `json:"amount"`
 }
 
 type signedtx struct {
@@ -271,24 +274,23 @@ func GetRawAddress() string {
 }
 
 func CalculateRequired(numInputs int, dataSize int) float64 {
-	return float64(53+numInputs*68+dataSize) * float64(0.00000002)
+	return float64(53+numInputs*68+dataSize) * float64(0.00000001)
 }
 
-func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64, string) {
+func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64) {
 	inputs := []map[string]interface{}{}
 	if unspent == "" {
-		return inputs, 0.0, ""
+		return inputs, 0.0
 	}
 	var t []json.RawMessage
 	err := json.Unmarshal([]byte(unspent), &t)
 	if err != nil {
 		log.Printf("Failed to unmarshal response: %v", err)
-		return inputs, 0.0, ""
+		return inputs, 0.0
 	}
 	totalAmt := 0.0
 	numInputs := 0
 	required := 0.0
-	var changeAddress string
 
 	log.Printf("Found %d UTXOs to process", len(t))
 
@@ -297,7 +299,7 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64,
 		err := json.Unmarshal(t[numInputs], &u)
 		if err != nil {
 			log.Printf("Failed to unmarshal response: %v", err)
-			return inputs, 0.0, ""
+			return inputs, 0.0
 		} else {
 			log.Printf("UTXO : %+v", u)
 		}
@@ -312,11 +314,6 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64,
 		totalAmt += float64(u.Amount)
 		required = CalculateRequired(numInputs+1, length)
 
-		// Use the address from the first UTXO as change address
-		if numInputs == 0 && u.Address != "" {
-			changeAddress = u.Address
-		}
-
 		log.Printf("Current total: %f BTC, required: %f BTC", totalAmt, required)
 
 		if totalAmt >= required {
@@ -324,12 +321,12 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64,
 		}
 		numInputs++
 		if numInputs >= 10 {
-			return []map[string]interface{}{}, 0.0, ""
+			return []map[string]interface{}{}, 0.0
 		}
 	}
 	change := ((totalAmt - required) * 100000000) / float64(100000000)
-	log.Printf("Inputs: %v, Change: %f, Change Address: %s", inputs, change, changeAddress)
-	return inputs, float64(change), changeAddress
+	log.Printf("Inputs: %v, Change: %f", inputs, change)
+	return inputs, float64(change)
 }
 
 func CreateRawTransaction(inputs []map[string]interface{}, address string, change float64, data string) string {
@@ -343,10 +340,7 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 		return ""
 	}
 
-	// Convert BTC to satoshis (1 BTC = 100,000,000 satoshis)
-	changeSatoshis := int64(change * 100000000)
-
-	log.Printf("Creating raw transaction with %d inputs, change address %s, change amount %f BTC (%d satoshis)", len(inputs), address, change, changeSatoshis)
+	log.Printf("Creating raw transaction with %d inputs, change address %s, change amount %f", len(inputs), address, change)
 
 	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
@@ -576,35 +570,37 @@ func CreateOPReturnTransaction(data string) string {
 	}
 
 	// Step 2: Filter UTXOs
-	inputs, change, changeAddress := FilterUTXOs(unspent, len(data))
+	inputs, change := FilterUTXOs(unspent, len(data))
 	if len(inputs) == 0 {
 		log.Printf("No suitable UTXOs found for transaction")
 		return ""
 	}
 
-	if changeAddress == "" {
-		log.Printf("No change address found in UTXOs")
+	// Step 3: Get raw address
+	rawaddr := GetRawAddress()
+	if rawaddr == "" {
+		log.Printf("Failed to get raw address")
 		return ""
 	}
 
-	// Step 3: Create raw transaction using change address from UTXOs
-	rawtscn := CreateRawTransaction(inputs, changeAddress, change, data)
+	// Step 4: Create raw transaction
+	rawtscn := CreateRawTransaction(inputs, rawaddr, change, data)
 	if rawtscn == "" {
 		log.Printf("Failed to create raw transaction")
 		return ""
 	}
 
-	// Step 4: Decode for verification (optional)
+	// Step 5: Decode for verification (optional)
 	DecodeRawTransaction(rawtscn)
 
-	// Step 5: Sign transaction
+	// Step 6: Sign transaction
 	signtscn := SignRawTransaction(rawtscn)
 	if signtscn == "" {
 		log.Printf("Failed to sign transaction")
 		return ""
 	}
 
-	// Step 6: Parse signed transaction
+	// Step 7: Parse signed transaction
 	var sgn signedtx
 	err := json.Unmarshal([]byte(signtscn), &sgn)
 	if err != nil {
@@ -612,7 +608,7 @@ func CreateOPReturnTransaction(data string) string {
 		return ""
 	}
 
-	// Step 7: Send signed transaction
+	// Step 8: Send signed transaction
 	sendtscn := SendSignedTransaction(sgn.Hex)
 	if sendtscn == "" {
 		log.Printf("Failed to send signed transaction")
@@ -621,6 +617,142 @@ func CreateOPReturnTransaction(data string) string {
 
 	log.Printf("Successfully created OP_RETURN transaction: %s", sendtscn)
 	return sendtscn
+}
+
+// MempoolSpaceTxResponse represents the response from mempool.space transaction API
+type MempoolSpaceTxResponse struct {
+	Txid   string `json:"txid"`
+	Fee    int    `json:"fee"`
+	Status struct {
+		Confirmed bool  `json:"confirmed"`
+		BlockTime int64 `json:"block_time"`
+	} `json:"status"`
+}
+
+// MempoolSpacePriceResponse represents the response from mempool.space historical price API
+type MempoolSpacePriceResponse struct {
+	Prices []struct {
+		Time int64 `json:"time"`
+		USD  int64 `json:"USD"`
+	} `json:"prices"`
+}
+
+// FetchTransactionFromMempoolSpace fetches transaction details from mempool.space API
+func FetchTransactionFromMempoolSpace(txHash string) (*MempoolSpaceTxResponse, error) {
+	url := fmt.Sprintf("https://mempool.space/api/tx/%s", txHash)
+
+	log.Printf("Fetching transaction details from mempool.space: %s", url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var txResponse MempoolSpaceTxResponse
+	err = json.Unmarshal(body, &txResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	log.Printf("Fetched transaction fee: %d satoshis, block time: %d", txResponse.Fee, txResponse.Status.BlockTime)
+	return &txResponse, nil
+}
+
+// FetchHistoricalBTCPrice fetches historical BTC price in USD from mempool.space API
+func FetchHistoricalBTCPrice(timestamp int64) (float64, error) {
+	url := fmt.Sprintf("https://mempool.space/api/v1/historical-price?currency=USD&timestamp=%d", timestamp)
+
+	log.Printf("Fetching BTC price from mempool.space: %s", url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("API returned status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var priceResponse MempoolSpacePriceResponse
+	err = json.Unmarshal(body, &priceResponse)
+	if err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(priceResponse.Prices) == 0 {
+		return 0, fmt.Errorf("no price data available")
+	}
+
+	// Convert price from integer (representing price * 100) to float
+	price := float64(priceResponse.Prices[0].USD) / 100.0
+
+	log.Printf("Fetched BTC price: $%.2f USD", price)
+	return price, nil
+}
+
+// CalculateTransactionFeeUSD calculates the transaction fee in USD
+func CalculateTransactionFeeUSD(txHash string, blockTime int64) (float64, error) {
+	// Fetch transaction details
+	txResponse, err := FetchTransactionFromMempoolSpace(txHash)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch transaction: %w", err)
+	}
+
+	// Determine timestamp to use for price lookup
+	var timestamp int64
+	if txResponse.Status.BlockTime != 0 {
+		// Use block time from transaction if available
+		timestamp = txResponse.Status.BlockTime
+	} else if blockTime != 0 {
+		// Use provided block time as fallback
+		timestamp = blockTime
+	} else {
+		// Use current time as last resort
+		timestamp = time.Now().Unix()
+	}
+
+	// Fetch historical BTC price
+	price, err := FetchHistoricalBTCPrice(timestamp)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch BTC price: %w", err)
+	}
+
+	// Convert fee from satoshis to BTC (1 BTC = 100,000,000 satoshis)
+	feeBTC := float64(txResponse.Fee) / 100000000.0
+
+	// Calculate fee in USD
+	feeUSD := feeBTC * price
+
+	log.Printf("Transaction fee: %d satoshis (%.8f BTC) * $%.2f = $%.2f USD", txResponse.Fee, feeBTC, price, feeUSD)
+	return feeUSD, nil
 }
 
 func InitOPReturnRPC(endpoint string, auth string, passphrase string) {

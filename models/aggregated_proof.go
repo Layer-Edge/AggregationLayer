@@ -244,3 +244,34 @@ func UpdateSuperProofWithBTCTxHash(id string, btc_tx_hash *string, btc_block_num
 	log.Printf("Updated super proof with BTC TX hash: %s", id)
 	return nil
 }
+
+func UpdateSuperProofWithTransactionFee(id string, transactionFee float64) error {
+	err := RetryDBOperation(func() error {
+		db, err := GetDB()
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err = db.NewUpdate().
+			Model(&AggregatedProof{}).
+			Where("id = ?", id).
+			Set("transaction_fee = ?", transactionFee).
+			Exec(ctx)
+
+		if err != nil {
+			return fmt.Errorf("failed to update super proof with transaction fee: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update super proof with transaction fee after retries: %w", err)
+	}
+
+	log.Printf("Updated super proof with transaction fee: %s ($%.2f)", id, transactionFee)
+	return nil
+}
