@@ -271,7 +271,7 @@ func GetRawAddress() string {
 }
 
 func CalculateRequired(numInputs int, dataSize int) float64 {
-	return float64(53+numInputs*68+dataSize) * float64(0.00000001)
+	return float64(53+numInputs*68+dataSize) * float64(0.00000002)
 }
 
 func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64, string) {
