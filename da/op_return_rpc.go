@@ -311,8 +311,8 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64)
 			"vout": u.Vout,
 		}
 		inputs = append(inputs, inputData)
-		totalAmt += float64(u.Amount)
-		required = CalculateRequired(numInputs+1, length)
+		totalAmt += (float64(u.Amount) * 100000000)
+		required = (CalculateRequired(numInputs+1, length) * 100000000)
 
 		log.Printf("Current total: %f BTC, required: %f BTC", totalAmt, required)
 
