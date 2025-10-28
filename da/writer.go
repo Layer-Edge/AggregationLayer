@@ -3,6 +3,8 @@ package da
 import (
 	// "context"
 
+	"strings"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -75,6 +77,9 @@ func HashBlockSubscriber(cfg *config.Config) {
 
 		// Use keccak256 hash of the ABI proof as leaf for merkle tree
 		proofHash := utils.Keccak256Hash(msg[1])
+		if !strings.HasPrefix(proofHash, "0x") {
+			proofHash = "0x" + proofHash
+		}
 		aggr.Aggregate(proofHash)
 
 		// Store proof hash for merkle tree storage (without 0x prefix for contract)

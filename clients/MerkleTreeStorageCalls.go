@@ -216,6 +216,8 @@ func storeMerkleTreeWithRetry(cfg *config.Config, contractAddress string, merkle
 	}
 	merkleRootHash := common.HexToHash(merkleRootStr)
 
+	log.Printf("\nMerkleroothash: %v", merkleRootHash)
+
 	// Parse leaves string into array of bytes
 	// Expected format: plain strings that will be converted to bytes
 	var leafHashes [][32]byte
@@ -224,6 +226,10 @@ func storeMerkleTreeWithRetry(cfg *config.Config, contractAddress string, merkle
 		leafStr = strings.TrimSpace(leafStr)
 		if leafStr == "" {
 			continue
+		}
+
+		if !strings.HasPrefix(leafStr, "0x") {
+			leafStr = "0x" + leafStr
 		}
 
 		// Convert plain string to bytes
