@@ -103,7 +103,10 @@ func HashBlockSubscriber(cfg *config.Config) {
 			return
 		}
 
-		log.Println("Aggregated Data: ", aggr.data)
+		if !strings.HasPrefix(merkle_root, "0x") {
+			merkle_root = "0x" + merkle_root
+		}
+
 		log.Println("Aggregated Proof: ", merkle_root)
 		aggr.data = ""
 
