@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -328,8 +329,9 @@ func FilterUTXOs(unspent string, length int) ([]map[string]interface{}, float64,
 		}
 	}
 	change := (totalAmt - required) / float64(100000000)
-	log.Printf("Inputs: %v, Change: %f, Change Address: %s", inputs, change, changeAddress)
-	return inputs, float64(change), changeAddress
+	rounded := math.Round(change*1e8) / 1e8
+	log.Printf("Inputs: %v, Change: %.8f, Change Address: %s", inputs, rounded, changeAddress)
+	return inputs, float64(rounded), changeAddress
 }
 
 func CreateRawTransaction(inputs []map[string]interface{}, address string, change float64, data string) string {
@@ -346,7 +348,7 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 	// Convert BTC to satoshis (1 BTC = 100,000,000 satoshis)
 	changeSatoshis := int64(change * 100000000)
 
-	log.Printf("Creating raw transaction with %d inputs, change address %s, change amount %f BTC (%d satoshis)", len(inputs), address, change, changeSatoshis)
+	log.Printf("Creating raw transaction with %d inputs, change address %s, change amount %.8f BTC (%d satoshis)", len(inputs), address, change, changeSatoshis)
 
 	payload := map[string]interface{}{
 		"jsonrpc": "1.0",
@@ -360,6 +362,9 @@ func CreateRawTransaction(inputs []map[string]interface{}, address string, chang
 			},
 		},
 	}
+	// Print payload for debugging
+	payloadBytes, _ := json.MarshalIndent(payload, "", "  ")
+	log.Printf("Payload: %s", string(payloadBytes))
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Failed to marshal create raw transaction payload: %v", err)
