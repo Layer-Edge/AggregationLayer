@@ -49,6 +49,11 @@ func CreateAggregatedProofWithBTC(agg_proof string, proof_list []string, btc_tx_
 		return nil, fmt.Errorf("error converting gas used: %w", err)
 	}
 
+	var transaction_fee *string = nil
+	if btc_tx_hash == nil {
+		transaction_fee = &data.TransactionFee
+	}
+
 	ap := &AggregatedProof{
 		BTCTxHash:       btc_tx_hash,
 		BTCBlockNumber:  btc_block_number,
@@ -59,7 +64,7 @@ func CreateAggregatedProofWithBTC(agg_proof string, proof_list []string, btc_tx_
 		Proofs:          proof_list,
 		To:              data.To,
 		TransactionHash: data.TransactionHash,
-		TransactionFee:  data.TransactionFee,
+		TransactionFee:  *transaction_fee,
 		EdgenPrice:      data.EdgenPrice,
 		Amount:          data.Amount,
 		Success:         data.Success,

@@ -64,7 +64,9 @@ func HashBlockSubscriber(cfg *config.Config) {
 	prf := ZKProof{}
 	proof_list := []string{}    // For database storage (hex-encoded proofs)
 	merkle_leaves := []string{} // For merkle tree storage (proof hashes)
-	last_write := time.Now().Unix()
+	// Initialize last_write to the current aligned boundary so the first write occurs at the next boundary
+	writePeriod := time.Duration(cfg.WriteIntervalSeconds) * time.Second
+	last_write := time.Now().Truncate(writePeriod).Unix()
 
 	fnAgg := func(msg [][]byte) bool {
 		log.Println("Aggregating message: ", string(msg[0]), "proof length:", len(msg[1]))
@@ -167,8 +169,9 @@ func HashBlockSubscriber(cfg *config.Config) {
 		}
 
 		// Write to LayerEdge chain with error handling
-		now := time.Now().Unix()
-		if (counter%cfg.WriteIntervalBlock) == 0 || now-last_write > int64(cfg.WriteIntervalSeconds) {
+		nowTime := time.Now()
+		alignedNow := nowTime.Truncate(writePeriod).Unix()
+		if (counter%cfg.WriteIntervalBlock) == 0 || alignedNow > last_write {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
@@ -177,7 +180,8 @@ func HashBlockSubscriber(cfg *config.Config) {
 				}()
 				fnWrite()
 			}()
-			last_write = now
+			// Record the boundary we just wrote for, so we only write once per aligned interval
+			last_write = alignedNow
 		}
 	}
 }
