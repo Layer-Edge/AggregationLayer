@@ -90,7 +90,7 @@ func NonBTCTxSuperProofCronJob(cfg *config.Config, immediate bool) {
 
 		// Calculate duration until next scheduled time
 		duration := nextScheduledTime.Sub(now)
-		log.Printf("Next super proof scheduled for: %s (in %v)", nextScheduledTime.Format("2006-01-02 15:04:05 UTC"), duration)
+		log.Printf("Next Retry super proof btc tx scheduled for: %s (in %v)", nextScheduledTime.Format("2006-01-02 15:04:05 UTC"), duration)
 
 		// Wait until next scheduled time
 		time.Sleep(duration)
@@ -115,7 +115,7 @@ func findNextScheduledTime(now time.Time, scheduledHours []int) time.Time {
 
 	// No more times today, schedule for the first time tomorrow
 	nextDay := now.AddDate(0, 0, 1)
-	return time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), scheduledHours[0], 0, 0, 0, time.UTC)
+	return time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), scheduledHours[0], 5, 0, 0, time.UTC)
 }
 
 func processSuperProof(cfg *config.Config) {

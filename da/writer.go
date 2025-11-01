@@ -3,6 +3,8 @@ package da
 import (
 	// "context"
 
+	"sync"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	// "github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -67,6 +69,8 @@ func HashBlockSubscriber(cfg *config.Config) {
 	// Initialize last_write to the current aligned boundary so the first write occurs at the next boundary
 	writePeriod := time.Duration(cfg.WriteIntervalSeconds) * time.Second
 	last_write := time.Now().Truncate(writePeriod).Unix()
+	// Mutex to protect write operations from race conditions
+	var writeMutex sync.Mutex
 
 	fnAgg := func(msg [][]byte) bool {
 		log.Println("Aggregating message: ", string(msg[0]), "proof length:", len(msg[1]))
@@ -92,6 +96,11 @@ func HashBlockSubscriber(cfg *config.Config) {
 				log.Printf("Panic in fnWrite: %v", r)
 			}
 		}()
+
+		if aggr.data == "" {
+			log.Println("No data to write, skipping")
+			return
+		}
 
 		// Generate and process proof
 		merkle_root := prf.GenerateAggregatedProof(aggr.data)
@@ -136,8 +145,72 @@ func HashBlockSubscriber(cfg *config.Config) {
 	// Listen for messages with enhanced error handling
 	fmt.Println("Listening for Data Blocks and Hash Blocks (writer)...")
 
+	// Create a ticker to periodically check if write interval has elapsed
+	// Check every second to ensure timely execution even without messages
+	timeCheckTicker := time.NewTicker(1 * time.Second)
+	defer timeCheckTicker.Stop()
+
+	// Channel to signal when time-based write should be triggered
+	timeWriteTrigger := make(chan struct{}, 1)
+
+	// Helper function to check and execute write if conditions are met
+	checkAndWrite := func(triggeredByMessage bool) {
+		writeMutex.Lock()
+		defer writeMutex.Unlock()
+
+		nowTime := time.Now()
+		alignedNow := nowTime.Truncate(writePeriod).Unix()
+		if (triggeredByMessage && (counter%cfg.WriteIntervalBlock) == 0) || alignedNow > last_write {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Panic in fnWrite: %v", r)
+					}
+				}()
+				fnWrite()
+			}()
+			// Record the boundary we just wrote for, so we only write once per aligned interval
+			last_write = alignedNow
+		}
+	}
+
+	// Goroutine to periodically check if write interval has elapsed
+	go func() {
+		for range timeCheckTicker.C {
+			writeMutex.Lock()
+			currentLastWrite := last_write
+			writeMutex.Unlock()
+
+			nowTime := time.Now()
+			alignedNow := nowTime.Truncate(writePeriod).Unix()
+			if alignedNow > currentLastWrite {
+				// Non-blocking send to trigger write check in main loop
+				select {
+				case timeWriteTrigger <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}()
+
 	for {
-		// Get message with timeout protection
+		// Check time-based trigger first (non-blocking)
+		select {
+		case <-timeWriteTrigger:
+			// Time-based check: trigger write if interval has elapsed (even without new message)
+			checkAndWrite(false)
+		default:
+		}
+
+		// Check time condition before blocking on GetMessage
+		// This ensures we check time even if no message arrives immediately
+		nowTime := time.Now()
+		alignedNow := nowTime.Truncate(writePeriod).Unix()
+		if alignedNow > last_write {
+			checkAndWrite(false)
+		}
+
+		// Get message (this may block, but we've already checked time above)
 		ok, msg := dataReader.GetMessage()
 		if !ok {
 			log.Println("Failed to receive message or channel closed")
@@ -168,20 +241,7 @@ func HashBlockSubscriber(cfg *config.Config) {
 			continue
 		}
 
-		// Write to LayerEdge chain with error handling
-		nowTime := time.Now()
-		alignedNow := nowTime.Truncate(writePeriod).Unix()
-		if (counter%cfg.WriteIntervalBlock) == 0 || alignedNow > last_write {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("Panic in fnWrite: %v", r)
-					}
-				}()
-				fnWrite()
-			}()
-			// Record the boundary we just wrote for, so we only write once per aligned interval
-			last_write = alignedNow
-		}
+		// Check and write after processing message
+		checkAndWrite(true)
 	}
 }
