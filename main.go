@@ -67,7 +67,7 @@ func main() {
 		}()
 
 		log.Println("Starting SuperProofCronJob...")
-		da.SuperProofCronJob(&cfg)
+		da.SuperProofCronJob(&cfg, false)
 		superProofDone <- nil
 	}()
 

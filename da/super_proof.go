@@ -17,7 +17,7 @@ func ProcessBTCMsg(msg []byte, protocolId string) ([]byte, error) {
 	return []byte(hash), nil
 }
 
-func SuperProofCronJob(cfg *config.Config) {
+func SuperProofCronJob(cfg *config.Config, immediate bool) {
 	// Initialize database with retry mechanism
 	err := models.InitDB(cfg.PostgresConnectionURI)
 	if err != nil {
@@ -36,6 +36,12 @@ func SuperProofCronJob(cfg *config.Config) {
 
 	// Define the scheduled hours (0, 6, 12, 18 in 24-hour format)
 	scheduledHours := []int{0, 6, 12, 18}
+
+	if immediate {
+		log.Println("Running super proof immediately")
+		processSuperProof(cfg)
+		return
+	}
 
 	for {
 		now := time.Now().UTC()
